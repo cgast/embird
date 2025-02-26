@@ -1,5 +1,42 @@
--- Enable pgvector extension
+-- First ensure we're connected to the right database
+\c newsdb;
+
+-- Required memory settings
+-- Increase work memory for operations (from current 4MB to 64MB)
+ALTER SYSTEM SET work_mem = '65536kB';
+
+-- Increase maintenance work memory (from current 512MB to 1GB)
+ALTER SYSTEM SET maintenance_work_mem = '1048576kB';
+
+-- Add statement timeout if needed (currently unlimited)
+-- Only set this if you want to prevent indefinitely long queries
+-- ALTER SYSTEM SET statement_timeout = '3600000ms';  -- 1 hour
+
+-- Increase checkpoint timeout (from current 5 min to 15 min)
+ALTER SYSTEM SET checkpoint_timeout = '900s';
+
+-- For autovacuum, since it's causing issues:
+ALTER SYSTEM SET autovacuum_work_mem = '1048576kB';  -- Currently -1 (uses maintenance_work_mem)
+ALTER SYSTEM SET autovacuum_vacuum_cost_delay = '20ms';  -- Make it less aggressive
+SELECT pg_reload_conf();
+
+
+-- Create the vector extension if it doesn't exist
 CREATE EXTENSION IF NOT EXISTS vector;
+
+-- Verify the extension was created
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 
+        FROM pg_extension 
+        WHERE extname = 'vector'
+    ) THEN
+        RAISE EXCEPTION 'Vector extension not installed properly';
+    END IF;
+END
+$$;
+
 
 -- Create news table with vector support
 CREATE TABLE IF NOT EXISTS news (
