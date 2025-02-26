@@ -21,4 +21,4 @@ RUN mkdir -p /app/data
 COPY app /app/app
 
 # Run the crawler service
-CMD ["python", "-m", "app.app.main"]
+CMD ["python", "-m", "app.main"]
