@@ -14,11 +14,16 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
+# Create appuser before setting up directories
+RUN adduser --disabled-password --gecos '' appuser
+
 # Create SQLite data directory
 RUN mkdir -p /app/data
 
 # Copy application
 COPY app /app/app
+
+USER appuser
 
 # Run the application
 EXPOSE 8000
