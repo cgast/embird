@@ -1,0 +1,57 @@
+news-crawler/
+├── .env.example
+├── .gitignore
+├── README.md
+├── docker-compose.yml
+├── init-scripts/
+│   └── init.sql
+├── webapp/
+│   ├── Dockerfile
+│   ├── app/
+│   │   ├── __init__.py
+│   │   ├── main.py
+│   │   ├── config.py
+│   │   ├── models/
+│   │   │   ├── __init__.py
+│   │   │   ├── url.py
+│   │   │   └── news.py
+│   │   ├── services/
+│   │   │   ├── __init__.py
+│   │   │   ├── embedding.py
+│   │   │   └── db.py
+│   │   ├── routes/
+│   │   │   ├── __init__.py
+│   │   │   ├── api.py
+│   │   │   └── web.py
+│   │   ├── templates/
+│   │   │   ├── base.html
+│   │   │   ├── index.html
+│   │   │   ├── url_form.html
+│   │   │   ├── url_list.html
+│   │   │   └── news_list.html
+│   │   └── static/
+│   │       ├── css/
+│   │       │   └── style.css
+│   │       └── js/
+│   │           └── main.js
+│   └── requirements.txt
+└── crawler/
+    ├── Dockerfile
+    ├── app/
+    │   ├── __init__.py
+    │   ├── main.py
+    │   ├── config.py
+    │   ├── models/
+    │   │   ├── __init__.py
+    │   │   ├── url.py
+    │   │   └── news.py
+    │   ├── services/
+    │   │   ├── __init__.py
+    │   │   ├── crawler.py
+    │   │   ├── embedding.py
+    │   │   ├── extractor.py
+    │   │   └── db.py
+    │   └── utils/
+    │       ├── __init__.py
+    │       └── helpers.py
+    └── requirements.txt

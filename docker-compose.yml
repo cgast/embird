@@ -1,0 +1,56 @@
+version: '3.8'
+
+services:
+  # Web frontend and API service
+  webapp:
+    build:
+      context: ./webapp
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./webapp:/app
+      - sqlite_data:/app/data
+    environment:
+      - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/newsdb
+      - SQLITE_PATH=/app/data/urls.db
+      - COHERE_API_KEY=${COHERE_API_KEY}
+      - CRAWLER_INTERVAL=3600  # 1 hour in seconds
+    depends_on:
+      - postgres
+    restart: unless-stopped
+
+  # Postgres with pgvector extension for vector embeddings
+  postgres:
+    image: ankane/pgvector:16
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=newsdb
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init-scripts:/docker-entrypoint-initdb.d
+    restart: unless-stopped
+
+  # Crawler service (separated for scalability)
+  crawler:
+    build:
+      context: ./crawler
+      dockerfile: Dockerfile
+    volumes:
+      - ./crawler:/app
+      - sqlite_data:/app/data
+    environment:
+      - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/newsdb
+      - SQLITE_PATH=/app/data/urls.db
+      - COHERE_API_KEY=${COHERE_API_KEY}
+      - CRAWLER_INTERVAL=3600  # 1 hour in seconds
+    depends_on:
+      - postgres
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  sqlite_data:
