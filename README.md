@@ -1,4 +1,4 @@
-# News Crawler
+# News Suck
 
 An open-source project for crawling RSS feeds and websites, extracting news content, and storing it with vector embeddings for semantic search.
 

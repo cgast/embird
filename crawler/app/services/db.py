@@ -29,6 +29,7 @@ async def init_db():
         # Create all tables if they don't exist
         await conn.run_sync(NewsBase.metadata.create_all)
 
+@asynccontextmanager
 async def get_db():
     """Get database session."""
     async with AsyncSessionLocal() as session:

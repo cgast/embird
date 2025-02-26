@@ -3,7 +3,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 from sqlalchemy.orm import selectinload
 from typing import List, Optional
-from pgvector.sqlalchemy import cosine_distance
+from pgvector.sqlalchemy import Vector
 import time
 
 from app.models.url import URL, URLCreate, URLDatabase
@@ -90,23 +90,26 @@ async def search_news(
     if not query_embedding:
         raise HTTPException(status_code=400, detail="Failed to generate embedding for the query")
     
-    # Search for similar news items using vector similarity
+    # Search for similar news items using cosine similarity
+    # Note: Lower cosine_distance means higher similarity
     stmt = select(
         NewsItem,
-        func.cube_distance(NewsItem.embedding, query_embedding).label("similarity")
+        func.cosine_distance(NewsItem.embedding, query_embedding).label("distance")
     ).filter(
         NewsItem.embedding.is_not(None)
     ).order_by(
-        cosine_distance(NewsItem.embedding, query_embedding)
+        func.cosine_distance(NewsItem.embedding, query_embedding)
     ).limit(limit)
     
     result = await db.execute(stmt)
     news_items = []
     
-    for item, similarity in result:
+    for item, distance in result:
         # Convert SQLAlchemy model to Pydantic model
         news_item = NewsItemSimilarity.from_orm(item)
-        news_item.similarity = 1.0 - float(similarity)  # Convert distance to similarity score
+        # Convert distance to similarity score (cosine similarity is between -1 and 1)
+        # Normalize to 0-1 range where 1 is most similar
+        news_item.similarity = (1.0 - float(distance)) / 2.0
         news_items.append(news_item)
     
     return news_items

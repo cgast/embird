@@ -26,7 +26,7 @@ pg_engine = create_async_engine(
 AsyncSessionLocal = sessionmaker(pg_engine, expire_on_commit=False, class_=AsyncSession)
 
 class Crawler:
-    """News crawler service."""
+    """News sucker service."""
 
     def __init__(self, url_db: URLDatabase):
         """Initialize the crawler."""
@@ -131,6 +131,11 @@ class Crawler:
                     # Create embedding for the content
                     text_for_embedding = f"{title}. {content_info['summary']}"
                     embedding = await self.embedding_service.get_embedding(text_for_embedding)
+                    
+                    # Skip if embedding generation failed
+                    if not embedding:
+                        logger.warning(f"Failed to generate embedding for {url}")
+                        return
                     
                     # Create new news item
                     now = datetime.utcnow()

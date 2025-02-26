@@ -1,4 +1,5 @@
 import os
+from datetime import datetime
 from fastapi import FastAPI, Request
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -16,9 +17,10 @@ app = FastAPI(title=settings.APP_NAME)
 # Mount static files
 app.mount("/static", StaticFiles(directory=os.path.join(os.path.dirname(__file__), "static")), name="static")
 
-# Setup templates
+# Setup templates with custom context
 templates_path = os.path.join(os.path.dirname(__file__), "templates")
 templates = Jinja2Templates(directory=templates_path)
+templates.env.globals["current_year"] = lambda: datetime.now().year
 
 # Include routers
 app.include_router(api.router, prefix="/api")

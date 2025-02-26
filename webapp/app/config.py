@@ -14,7 +14,7 @@ class Settings(BaseSettings):
     CRAWLER_INTERVAL: int = int(os.environ.get("CRAWLER_INTERVAL", 3600))  # 1 hour in seconds
     
     # App Settings
-    APP_NAME: str = "News Crawler"
+    APP_NAME: str = "News Suck"
     DEBUG: bool = os.environ.get("DEBUG", "False").lower() in ("true", "1", "t")
     
     # Ensure SQLite directory exists

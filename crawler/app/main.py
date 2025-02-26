@@ -46,27 +46,21 @@ async def crawl_all_urls():
     
     logger.info("Crawl job completed")
 
-def run_crawl_job():
-    """Run the crawl job synchronously (for scheduler)."""
-    asyncio.run(crawl_all_urls())
-
 async def main():
     """Main function to start the crawler service."""
-    logger.info("Starting News Crawler service")
+    logger.info("Starting News Suck service")
     
     # Run initial crawl
     await crawl_all_urls()
     
-    # Schedule recurring crawl
+    # Schedule recurring crawl using asyncio
     logger.info(f"Scheduling crawl job every {settings.CRAWLER_INTERVAL} seconds")
     
-    # Schedule the job
-    schedule.every(settings.CRAWLER_INTERVAL).seconds.do(run_crawl_job)
-    
-    # Run the scheduler loop
     while True:
-        schedule.run_pending()
-        await asyncio.sleep(1)
+        # Run crawl job
+        await crawl_all_urls()
+        # Wait for next interval
+        await asyncio.sleep(settings.CRAWLER_INTERVAL)
 
 if __name__ == "__main__":
     asyncio.run(main())

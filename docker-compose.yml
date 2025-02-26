@@ -22,9 +22,9 @@ services:
 
   # Postgres with pgvector extension for vector embeddings
   postgres:
-    image: ankane/pgvector:16
-    ports:
-      - "5432:5432"
+    image: pgvector/pgvector:pg15
+    #ports:
+    #  - "5432:5432"
     environment:
       - POSTGRES_USER=postgres
       - POSTGRES_PASSWORD=postgres

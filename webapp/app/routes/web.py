@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Request, Form, Depends, HTTPException, Query
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func
+from sqlalchemy import select, func, text
 from typing import List, Optional
 import time
 
@@ -20,7 +20,7 @@ async def index(request: Request, db: AsyncSession = Depends(get_db)):
     news_items = result.scalars().all()
     
     # Get trending news items
-    time_filter = func.now() - func.make_interval(hours=24)
+    time_filter = func.now() - text("interval '24 hours'")
     trending_query = select(NewsItem).filter(
         NewsItem.last_seen_at >= time_filter
     ).order_by(
@@ -55,7 +55,7 @@ async def list_urls(request: Request):
     """Render the URLs page."""
     urls = url_db.get_all_urls()
     return request.state.templates.TemplateResponse(
-        "url_list.html",
+        "url_form.html",
         {"request": request, "urls": urls}
     )
 
@@ -63,7 +63,7 @@ async def list_urls(request: Request):
 async def add_url_form(request: Request):
     """Render the add URL form."""
     return request.state.templates.TemplateResponse(
-        "url_form.html",
+        "url_add.html",
         {"request": request}
     )
 
@@ -80,7 +80,7 @@ async def add_url(
         return RedirectResponse(url="/urls", status_code=303)
     except Exception as e:
         return request.state.templates.TemplateResponse(
-            "url_form.html",
+            "url_add.html",
             {"request": request, "error": str(e)}
         )
 
