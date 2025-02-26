@@ -26,7 +26,7 @@ pg_engine = create_async_engine(
 AsyncSessionLocal = sessionmaker(pg_engine, expire_on_commit=False, class_=AsyncSession)
 
 class Crawler:
-    """News sucker service."""
+    """News crawler service."""
 
     def __init__(self, url_db: URLDatabase):
         """Initialize the crawler."""
@@ -38,19 +38,24 @@ class Crawler:
             headers={"User-Agent": settings.USER_AGENT},
             follow_redirects=True
         )
+        self.semaphore = asyncio.Semaphore(settings.MAX_CONCURRENT_REQUESTS)
 
     async def crawl_url(self, url_item: URL):
         """Crawl a single URL."""
-        if url_item.type == "rss":
-            await self._crawl_rss(url_item)
-        else:
-            await self._crawl_homepage(url_item)
+        try:
+            if url_item.type == "rss":
+                await self._crawl_rss(url_item)
+            else:
+                await self._crawl_homepage(url_item)
+        except Exception as e:
+            logger.error(f"Error crawling {url_item.url}: {str(e)}")
 
     async def _crawl_rss(self, url_item: URL):
         """Crawl an RSS feed."""
         try:
-            response = await self.http_client.get(url_item.url)
-            response.raise_for_status()
+            async with self.semaphore:
+                response = await self.http_client.get(url_item.url)
+                response.raise_for_status()
             
             # Use feedparser to parse the RSS content
             feed = feedparser.parse(response.text)
@@ -72,15 +77,17 @@ class Crawler:
             # Wait for all tasks to complete
             await asyncio.gather(*tasks)
             
+        except httpx.HTTPError as e:
+            logger.error(f"HTTP error crawling RSS feed {url_item.url}: {str(e)}")
         except Exception as e:
             logger.error(f"Error crawling RSS feed {url_item.url}: {str(e)}")
-            raise
 
     async def _crawl_homepage(self, url_item: URL):
         """Crawl a homepage and extract news links."""
         try:
-            response = await self.http_client.get(url_item.url)
-            response.raise_for_status()
+            async with self.semaphore:
+                response = await self.http_client.get(url_item.url)
+                response.raise_for_status()
             
             # Extract links using the extractor
             links = self.extractor.extract_links(response.text, url_item.url)
@@ -97,9 +104,32 @@ class Crawler:
             # Wait for all tasks to complete
             await asyncio.gather(*tasks)
             
+        except httpx.HTTPError as e:
+            logger.error(f"HTTP error crawling homepage {url_item.url}: {str(e)}")
         except Exception as e:
             logger.error(f"Error crawling homepage {url_item.url}: {str(e)}")
-            raise
+
+    async def _fetch_content(self, url: str) -> Optional[Dict[str, str]]:
+        """Fetch and extract content from a URL."""
+        try:
+            async with self.semaphore:
+                response = await self.http_client.get(url)
+                response.raise_for_status()
+            
+            # Extract content using the extractor
+            content = self.extractor.extract_content(response.text, url)
+            if not content:
+                logger.warning(f"Failed to extract content from {url}")
+                return None
+                
+            return content
+            
+        except httpx.HTTPError as e:
+            logger.error(f"HTTP error fetching content from {url}: {str(e)}\nFor more information check: https://httpstatuses.com/{e.response.status_code}")
+            return None
+        except Exception as e:
+            logger.error(f"Error fetching content from {url}: {str(e)}")
+            return None
 
     async def _process_news_item(self, title: str, url: str, source_url: str):
         """Process a news item link."""
@@ -158,15 +188,6 @@ class Crawler:
         except Exception as e:
             logger.error(f"Error processing news item {url}: {str(e)}")
 
-    async def _fetch_content(self, url: str) -> Optional[Dict[str, str]]:
-        """Fetch and extract content from a URL."""
-        try:
-            response = await self.http_client.get(url)
-            response.raise_for_status()
-            
-            # Extract content using the extractor
-            return self.extractor.extract_content(response.text, url)
-            
-        except Exception as e:
-            logger.error(f"Error fetching content from {url}: {str(e)}")
-            return None
+    async def close(self):
+        """Close the HTTP client."""
+        await self.http_client.aclose()

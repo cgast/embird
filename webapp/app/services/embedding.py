@@ -20,14 +20,19 @@ class EmbeddingService:
             # For now, this is a synchronous call
             response = self.client.embed(
                 texts=[text],
-                model="embed-english-v3.0",  # or your preferred model
-                input_type="search_document"
+                model="embed-english-v3.0",  # Using v3.0 model which provides 1024-dimensional embeddings
+                input_type="search_document",  # Required for v3 models
+                embedding_types=["float"]  # Get float embeddings for maximum precision
             )
             
-            # Return the embedding vector
-            return response.embeddings[0]
+            # Handle different response types
+            if response.response_type == "embeddings_floats":
+                return response.embeddings[0]
+            else:  # embeddings_by_type
+                embeddings = response.embeddings.float_  # This is already a list of embeddings
+                return embeddings[0]
+                
         except Exception as e:
-            # Log the error and return None
             print(f"Error generating embedding: {e}")
             return None
 

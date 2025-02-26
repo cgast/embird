@@ -20,7 +20,7 @@ class NewsItem(Base):
     first_seen_at = Column(DateTime(timezone=True), nullable=False)
     last_seen_at = Column(DateTime(timezone=True), nullable=False)
     hit_count = Column(Integer, nullable=False, default=1)
-    embedding = Column(Vector(1536), nullable=True)  # Using 1536 dimensions for Cohere embeddings
+    embedding = Column(Vector(1024), nullable=True)  # Using 1024 dimensions for Cohere embed-english-v3.0
     created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
     updated_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now())
     

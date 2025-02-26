@@ -17,8 +17,9 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Create appuser before setting up directories
 RUN adduser --disabled-password --gecos '' appuser
 
-# Create SQLite data directory
-RUN mkdir -p /app/data
+# Create SQLite data directory and set permissions
+RUN mkdir -p /app/data && \
+    chown -R appuser:appuser /app/data
 
 # Copy application
 COPY app /app/app

@@ -14,11 +14,17 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Create SQLite data directory
-RUN mkdir -p /app/data
+# Create appuser before setting up directories
+RUN adduser --disabled-password --gecos '' appuser
+
+# Create SQLite data directory and set permissions
+RUN mkdir -p /app/data && \
+    chown -R appuser:appuser /app/data
 
 # Copy application
 COPY app /app/app
+
+USER appuser
 
 # Run the crawler service
 CMD ["python", "-m", "app.main"]

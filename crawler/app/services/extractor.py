@@ -5,15 +5,20 @@ from bs4 import BeautifulSoup
 from urllib.parse import urljoin, urlparse
 from readability import Document
 from newspaper import Article
+from newspaper.article import ArticleException
 
 logger = logging.getLogger(__name__)
 
 class ContentExtractor:
     """Service for extracting content and links from web pages."""
     
+    def __init__(self):
+        self.min_content_length = 100
+        self.max_summary_length = 2000
+    
     def extract_content(self, html: str, url: str) -> Optional[Dict[str, str]]:
         """
-        Extract content from an HTML page.
+        Extract content from an HTML page using multiple methods.
         
         Args:
             html: The HTML content
@@ -22,37 +27,106 @@ class ContentExtractor:
         Returns:
             Dictionary with extracted content or None if extraction failed
         """
-        try:
-            # Try using readability-lxml for extraction
-            doc = Document(html)
-            title = doc.title()
-            summary = doc.summary()
-            
-            # Clean up the summary
-            soup = BeautifulSoup(summary, "lxml")
-            clean_text = soup.get_text(separator=' ', strip=True)
-            
-            # Fallback to newspaper3k if content is too short
-            if len(clean_text) < 100:
-                article = Article(url)
-                article.set_html(html)
-                article.parse()
-                title = article.title
-                clean_text = article.text
-            
-            # Truncate summary if it's too long
-            max_summary_length = 2000
-            if len(clean_text) > max_summary_length:
-                clean_text = clean_text[:max_summary_length] + "..."
-            
-            return {
-                "title": title,
-                "summary": clean_text
-            }
-            
-        except Exception as e:
-            logger.error(f"Error extracting content from {url}: {str(e)}")
+        if not html:
+            logger.warning(f"Empty HTML content for {url}")
             return None
+            
+        content = None
+        
+        # Try readability-lxml first
+        try:
+            content = self._extract_with_readability(html)
+            if content and len(content["summary"]) >= self.min_content_length:
+                logger.info(f"Successfully extracted content from {url} using readability-lxml")
+                return content
+            else:
+                logger.debug(f"Readability extraction too short for {url}, trying newspaper3k")
+        except Exception as e:
+            logger.warning(f"Readability extraction failed for {url}: {str(e)}")
+        
+        # Fallback to newspaper3k
+        try:
+            content = self._extract_with_newspaper(html, url)
+            if content and len(content["summary"]) >= self.min_content_length:
+                logger.info(f"Successfully extracted content from {url} using newspaper3k")
+                return content
+            else:
+                logger.warning(f"Newspaper extraction too short for {url}")
+        except Exception as e:
+            logger.warning(f"Newspaper extraction failed for {url}: {str(e)}")
+        
+        # If we have any content, even if short, return it
+        if content and content["summary"]:
+            logger.info(f"Returning short content for {url} (length: {len(content['summary'])})")
+            return content
+            
+        logger.error(f"All content extraction methods failed for {url}")
+        return None
+    
+    def _extract_with_readability(self, html: str) -> Optional[Dict[str, str]]:
+        """Extract content using readability-lxml."""
+        doc = Document(html)
+        title = doc.title()
+        summary = doc.summary()
+        
+        # Clean up the summary
+        soup = BeautifulSoup(summary, "lxml")
+        clean_text = self._clean_text(soup.get_text())
+        
+        return {
+            "title": title,
+            "summary": self._truncate_text(clean_text)
+        }
+    
+    def _extract_with_newspaper(self, html: str, url: str) -> Optional[Dict[str, str]]:
+        """Extract content using newspaper3k."""
+        article = Article(url)
+        article.set_html(html)
+        article.parse()
+        
+        # Get the text content
+        text = article.text
+        if not text:
+            return None
+            
+        clean_text = self._clean_text(text)
+        
+        return {
+            "title": article.title,
+            "summary": self._truncate_text(clean_text)
+        }
+    
+    def _clean_text(self, text: str) -> str:
+        """Clean extracted text content."""
+        if not text:
+            return ""
+            
+        # Remove excessive whitespace
+        text = ' '.join(text.split())
+        
+        # Remove common noise patterns
+        noise_patterns = [
+            r'Share this:', 
+            r'Follow us on Twitter',
+            r'Like us on Facebook',
+            r'Subscribe to our newsletter',
+            r'Comments?',
+            r'©\s*\d{4}',  # Copyright notices
+            r'All rights reserved',
+            r'Terms of [Ss]ervice',
+            r'Privacy [Pp]olicy'
+        ]
+        
+        for pattern in noise_patterns:
+            text = re.sub(pattern, '', text)
+        
+        return text.strip()
+    
+    def _truncate_text(self, text: str) -> str:
+        """Truncate text to maximum length."""
+        if len(text) > self.max_summary_length:
+            return text[:self.max_summary_length] + "..."
+        return text
     
     def extract_links(self, html: str, base_url: str) -> List[Dict[str, str]]:
         """
@@ -116,6 +190,7 @@ class ContentExtractor:
                     if link_info not in links:
                         links.append(link_info)
             
+            logger.info(f"Extracted {len(links)} links from {base_url}")
             return links
             
         except Exception as e:
@@ -164,6 +239,7 @@ class ContentExtractor:
                         "description": description
                     })
             
+            logger.info(f"Extracted {len(items)} RSS items")
             return items
             
         except Exception as e:

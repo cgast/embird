@@ -11,7 +11,7 @@ CREATE TABLE IF NOT EXISTS news (
     first_seen_at TIMESTAMP WITH TIME ZONE NOT NULL,
     last_seen_at TIMESTAMP WITH TIME ZONE NOT NULL,
     hit_count INTEGER NOT NULL DEFAULT 1,
-    embedding vector(1536), -- Using 1536 dimensions for Cohere embeddings
+    embedding vector(1024), -- Updated to 1024 dimensions for Cohere embed-english-v3.0 model
     created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
 );

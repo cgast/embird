@@ -17,7 +17,8 @@ services:
       - COHERE_API_KEY=${COHERE_API_KEY}
       - CRAWLER_INTERVAL=3600  # 1 hour in seconds
     depends_on:
-      - postgres
+      postgres:
+        condition: service_healthy
     restart: unless-stopped
 
   # Postgres with pgvector extension for vector embeddings
@@ -32,6 +33,11 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./init-scripts:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
     restart: unless-stopped
 
   # Crawler service (separated for scalability)
@@ -48,7 +54,8 @@ services:
       - COHERE_API_KEY=${COHERE_API_KEY}
       - CRAWLER_INTERVAL=3600  # 1 hour in seconds
     depends_on:
-      - postgres
+      postgres:
+        condition: service_healthy
     restart: unless-stopped
 
 volumes:
