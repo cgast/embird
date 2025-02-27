@@ -98,19 +98,20 @@ async def search_news(
         # Convert embedding to string representation
         vector_str = f"[{','.join(str(x) for x in query_embedding)}]"
         
-        # Use simple SQL with direct vector casting
+        
+        # Modified SQL using cast() function instead of :: operator
         stmt = text("""
             SELECT 
                 id, title, summary, url, source_url, 
                 first_seen_at, last_seen_at, hit_count,
                 created_at, updated_at,
-                cosine_distance(embedding, :vector::vector) as distance
+                cosine_distance(embedding, cast(:vector as vector)) as distance
             FROM news
             WHERE embedding IS NOT NULL
-            ORDER BY cosine_distance(embedding, :vector::vector)
+            ORDER BY cosine_distance(embedding, cast(:vector as vector))
             LIMIT :limit
         """)
-        
+
         # Execute query with parameters
         result = await db.execute(
             stmt,
