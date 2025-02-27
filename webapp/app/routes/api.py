@@ -67,17 +67,7 @@ async def get_news(
     
     return news_items
 
-@router.get("/news/{news_id}", response_model=NewsItemResponse)
-async def get_news_item(news_id: int, db: AsyncSession = Depends(get_db)):
-    """Get a news item by ID."""
-    result = await db.execute(select(NewsItem).filter(NewsItem.id == news_id))
-    news_item = result.scalars().first()
-    
-    if not news_item:
-        raise HTTPException(status_code=404, detail="News item not found")
-    
-    return news_item
-
+# Important: Place specific routes before parameterized routes
 @router.get("/news/search", response_model=List[NewsItemSimilarity])
 async def search_news(
     query: str,
@@ -149,3 +139,15 @@ async def get_trending_news(
     news_items = result.scalars().all()
     
     return news_items
+
+# Place parameterized routes last
+@router.get("/news/{news_id}", response_model=NewsItemResponse)
+async def get_news_item(news_id: int, db: AsyncSession = Depends(get_db)):
+    """Get a news item by ID."""
+    result = await db.execute(select(NewsItem).filter(NewsItem.id == news_id))
+    news_item = result.scalars().first()
+    
+    if not news_item:
+        raise HTTPException(status_code=404, detail="News item not found")
+    
+    return news_item
