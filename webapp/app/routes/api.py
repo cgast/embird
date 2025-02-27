@@ -1,10 +1,11 @@
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 from sqlalchemy.orm import selectinload
 from typing import List, Optional
 from pgvector.sqlalchemy import Vector
 import time
+import logging
 
 from app.models.url import URL, URLCreate, URLDatabase
 from app.models.news import NewsItem, NewsItemResponse, NewsItemSimilarity
@@ -79,15 +80,26 @@ async def get_news_item(news_id: int, db: AsyncSession = Depends(get_db)):
 
 @router.get("/news/search", response_model=List[NewsItemSimilarity])
 async def search_news(
+    request: Request,
     query: str,
     db: AsyncSession = Depends(get_db),
     embedding_service: EmbeddingService = Depends(get_embedding_service),
     limit: int = Query(10, ge=1, le=100)
 ):
     """Search news items by semantic similarity."""
+    # Log request details for debugging
+    logging.info(f"Search request from {request.client.host} with query: {query}")
+    logging.info(f"Headers: {dict(request.headers)}")
+    
     # Validate query
     if not query or not query.strip():
-        raise HTTPException(status_code=422, detail="Search query cannot be empty")
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "error": "Validation error",
+                "message": "Search query cannot be empty"
+            }
+        )
     
     # Clean query
     query = query.strip()
@@ -97,7 +109,10 @@ async def search_news(
         if not settings.COHERE_API_KEY:
             raise HTTPException(
                 status_code=422,
-                detail="Cohere API key not configured. Please check environment variables."
+                detail={
+                    "error": "Configuration error",
+                    "message": "Cohere API key not configured"
+                }
             )
         
         # Generate embedding for the query
@@ -106,11 +121,13 @@ async def search_news(
         if not query_embedding:
             raise HTTPException(
                 status_code=422,
-                detail="Failed to generate embedding for the query. Please try a different search term."
+                detail={
+                    "error": "Embedding error",
+                    "message": "Failed to generate embedding for the query"
+                }
             )
         
         # Search for similar news items using cosine similarity
-        # Note: Lower cosine_distance means higher similarity
         stmt = select(
             NewsItem,
             func.cosine_distance(NewsItem.embedding, query_embedding).label("distance")
@@ -124,24 +141,24 @@ async def search_news(
         news_items = []
         
         for item, distance in result:
-            # Convert SQLAlchemy model to Pydantic model
             news_item = NewsItemSimilarity.from_orm(item)
-            # Convert distance to similarity score (cosine similarity is between -1 and 1)
-            # Normalize to 0-1 range where 1 is most similar
             news_item.similarity = (1.0 - float(distance)) / 2.0
             news_items.append(news_item)
         
         return news_items
         
     except Exception as e:
-        # Add more detailed error information
-        error_detail = str(e)
-        if "cohere" in error_detail.lower():
-            error_detail = "Cohere API error. Please check API key and try again."
+        logging.error(f"Search error: {str(e)}")
+        error_detail = {
+            "error": "Search error",
+            "message": str(e)
+        }
+        if "cohere" in str(e).lower():
+            error_detail["message"] = "Error connecting to embedding service"
         
         raise HTTPException(
             status_code=422,
-            detail=f"Error processing search query: {error_detail}"
+            detail=error_detail
         )
 
 @router.get("/news/trending", response_model=List[NewsItemResponse])

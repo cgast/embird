@@ -78,7 +78,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const loadingIndicator = document.getElementById('loadingIndicator');
     const resultsStats = document.getElementById('resultsStats');
     
-    searchForm.addEventListener('submit', function(e) {
+    searchForm.addEventListener('submit', async function(e) {
         e.preventDefault();
         
         const query = searchQuery.value.trim();
@@ -90,79 +90,83 @@ document.addEventListener('DOMContentLoaded', function() {
         noResults.classList.add('d-none');
         searchError.classList.add('d-none');
         
-        // Get the base URL from the current location
-        const baseUrl = window.location.pathname.split('/search')[0] || '';
-        
-        // Perform search using absolute path
-        fetch(`${baseUrl}/api/news/search?query=${encodeURIComponent(query)}`, {
-            headers: {
-                'Accept': 'application/json'
-            }
-        })
-            .then(response => {
-                if (!response.ok) {
-                    return response.json().then(err => {
-                        throw new Error(err.detail || 'Search failed');
-                    });
+        try {
+            // Get the base URL from the current location
+            const baseUrl = window.location.pathname.split('/search')[0] || '';
+            
+            // Perform search using absolute path
+            const response = await fetch(`${baseUrl}/api/news/search?query=${encodeURIComponent(query)}`, {
+                headers: {
+                    'Accept': 'application/json'
                 }
-                return response.json();
-            })
-            .then(data => {
-                // Hide loading
-                loadingIndicator.classList.add('d-none');
-                
-                // Show results container
-                resultsContainer.classList.remove('d-none');
-                
-                if (data.length === 0) {
-                    // No results
-                    noResults.classList.remove('d-none');
-                    searchResults.innerHTML = '';
-                    resultsStats.textContent = 'No results found';
-                } else {
-                    // Show results
-                    noResults.classList.add('d-none');
-                    resultsStats.textContent = `Found ${data.length} results`;
-                    
-                    // Render results
-                    searchResults.innerHTML = '';
-                    data.forEach(item => {
-                        const similarity = (item.similarity * 100).toFixed(1);
-                        const resultCard = document.createElement('div');
-                        resultCard.className = 'card mb-3';
-                        resultCard.innerHTML = `
-                            <div class="card-body">
-                                <div class="d-flex justify-content-between align-items-start mb-2">
-                                    <h5 class="card-title mb-0">
-                                        <a href="${baseUrl}/news/${item.id}">${item.title}</a>
-                                    </h5>
-                                    <span class="badge bg-success">${similarity}% match</span>
-                                </div>
-                                <h6 class="card-subtitle mb-2 text-muted">${item.source_url}</h6>
-                                <p class="card-text">${truncateSummary(item.summary, 200)}</p>
-                                <div class="d-flex justify-content-between align-items-center">
-                                    <small class="text-muted">
-                                        First seen: ${formatDate(item.first_seen_at)}
-                                    </small>
-                                    <a href="${baseUrl}/news/${item.id}" class="btn btn-sm btn-outline-primary">
-                                        View Details
-                                    </a>
-                                </div>
-                            </div>
-                        `;
-                        searchResults.appendChild(resultCard);
-                    });
-                }
-            })
-            .catch(error => {
-                // Show error
-                loadingIndicator.classList.add('d-none');
-                resultsContainer.classList.remove('d-none');
-                searchError.classList.remove('d-none');
-                searchError.querySelector('p').textContent = error.message || 'Error performing search. Please try again.';
-                searchResults.innerHTML = '';
-                console.error('Search error:', error);
             });
+            
+            const data = await response.json();
+            
+            // Hide loading
+            loadingIndicator.classList.add('d-none');
+            
+            // Show results container
+            resultsContainer.classList.remove('d-none');
+            
+            if (!response.ok) {
+                // Show error from API
+                searchError.classList.remove('d-none');
+                const errorMessage = data.detail?.message || data.detail || 'Error performing search';
+                searchError.querySelector('p').textContent = errorMessage;
+                searchResults.innerHTML = '';
+                console.error('Search error:', data);
+                return;
+            }
+            
+            if (data.length === 0) {
+                // No results
+                noResults.classList.remove('d-none');
+                searchResults.innerHTML = '';
+                resultsStats.textContent = 'No results found';
+            } else {
+                // Show results
+                noResults.classList.add('d-none');
+                resultsStats.textContent = `Found ${data.length} results`;
+                
+                // Render results
+                searchResults.innerHTML = '';
+                data.forEach(item => {
+                    const similarity = (item.similarity * 100).toFixed(1);
+                    const resultCard = document.createElement('div');
+                    resultCard.className = 'card mb-3';
+                    resultCard.innerHTML = `
+                        <div class="card-body">
+                            <div class="d-flex justify-content-between align-items-start mb-2">
+                                <h5 class="card-title mb-0">
+                                    <a href="${baseUrl}/news/${item.id}">${item.title}</a>
+                                </h5>
+                                <span class="badge bg-success">${similarity}% match</span>
+                            </div>
+                            <h6 class="card-subtitle mb-2 text-muted">${item.source_url}</h6>
+                            <p class="card-text">${truncateSummary(item.summary, 200)}</p>
+                            <div class="d-flex justify-content-between align-items-center">
+                                <small class="text-muted">
+                                    First seen: ${formatDate(item.first_seen_at)}
+                                </small>
+                                <a href="${baseUrl}/news/${item.id}" class="btn btn-sm btn-outline-primary">
+                                    View Details
+                                </a>
+                            </div>
+                        </div>
+                    `;
+                    searchResults.appendChild(resultCard);
+                });
+            }
+        } catch (error) {
+            // Show error
+            loadingIndicator.classList.add('d-none');
+            resultsContainer.classList.remove('d-none');
+            searchError.classList.remove('d-none');
+            searchError.querySelector('p').textContent = 'Error connecting to search service. Please try again.';
+            searchResults.innerHTML = '';
+            console.error('Search error:', error);
+        }
     });
     
     // Helper function to truncate summary
