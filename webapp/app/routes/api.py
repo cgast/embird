@@ -1,11 +1,12 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func
+from sqlalchemy import select, func, cast
 from sqlalchemy.orm import selectinload
 from typing import List, Optional
 from pgvector.sqlalchemy import Vector
 import time
 import logging
+from sqlalchemy.dialects.postgresql import ARRAY, FLOAT
 
 from app.models.url import URL, URLCreate, URLDatabase
 from app.models.news import NewsItem, NewsItemResponse, NewsItemSimilarity
@@ -94,14 +95,17 @@ async def search_news(
         if not query_embedding:
             raise HTTPException(status_code=422, detail="Failed to generate embedding")
         
+        # Convert the embedding list to a Vector
+        vector_embedding = Vector(query_embedding)
+        
         # Search for similar news items using cosine similarity
         stmt = select(
             NewsItem,
-            func.cosine_distance(NewsItem.embedding, query_embedding).label("distance")
+            func.cosine_distance(NewsItem.embedding, vector_embedding).label("distance")
         ).filter(
             NewsItem.embedding.is_not(None)
         ).order_by(
-            func.cosine_distance(NewsItem.embedding, query_embedding)
+            func.cosine_distance(NewsItem.embedding, vector_embedding)
         ).limit(limit)
         
         result = await db.execute(stmt)
