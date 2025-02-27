@@ -1,9 +1,14 @@
-/* Custom styles for News Suck */
+/* Custom styles for news-suck */
+
+:root {
+    font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+}
 
 body {
     min-height: 100vh;
     display: flex;
     flex-direction: column;
+    font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
 }
 
 .footer {

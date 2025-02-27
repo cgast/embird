@@ -18,7 +18,7 @@ class Settings(BaseSettings):
     NEWS_MAX_ITEMS: int = int(os.environ.get("NEWS_MAX_ITEMS", 10000))
     
     # App Settings
-    APP_NAME: str = "News Suck"
+    APP_NAME: str = "news-suck"
     DEBUG: bool = os.environ.get("DEBUG", "False").lower() in ("true", "1", "t")
     
     # Ensure SQLite directory exists

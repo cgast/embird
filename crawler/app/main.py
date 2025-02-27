@@ -48,7 +48,7 @@ async def crawl_all_urls():
 
 async def main():
     """Main function to start the crawler service."""
-    logger.info("Starting News Suck service")
+    logger.info("Starting news-suck service")
     
     # Run initial crawl
     await crawl_all_urls()

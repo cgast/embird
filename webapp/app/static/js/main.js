@@ -1,4 +1,4 @@
-// Main JavaScript for News Suck
+// Main JavaScript for news-suck
 
 document.addEventListener('DOMContentLoaded', function() {
     // Add active class to current nav item
