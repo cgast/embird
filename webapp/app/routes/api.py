@@ -84,35 +84,49 @@ async def search_news(
     limit: int = Query(10, ge=1, le=100)
 ):
     """Search news items by semantic similarity."""
-    # Generate embedding for the query
-    query_embedding = await embedding_service.get_embedding(query)
+    # Validate query
+    if not query or not query.strip():
+        raise HTTPException(status_code=422, detail="Search query cannot be empty")
     
-    if not query_embedding:
-        raise HTTPException(status_code=400, detail="Failed to generate embedding for the query")
+    # Clean query
+    query = query.strip()
     
-    # Search for similar news items using cosine similarity
-    # Note: Lower cosine_distance means higher similarity
-    stmt = select(
-        NewsItem,
-        func.cosine_distance(NewsItem.embedding, query_embedding).label("distance")
-    ).filter(
-        NewsItem.embedding.is_not(None)
-    ).order_by(
-        func.cosine_distance(NewsItem.embedding, query_embedding)
-    ).limit(limit)
-    
-    result = await db.execute(stmt)
-    news_items = []
-    
-    for item, distance in result:
-        # Convert SQLAlchemy model to Pydantic model
-        news_item = NewsItemSimilarity.from_orm(item)
-        # Convert distance to similarity score (cosine similarity is between -1 and 1)
-        # Normalize to 0-1 range where 1 is most similar
-        news_item.similarity = (1.0 - float(distance)) / 2.0
-        news_items.append(news_item)
-    
-    return news_items
+    try:
+        # Generate embedding for the query
+        query_embedding = await embedding_service.get_embedding(query)
+        
+        if not query_embedding:
+            raise HTTPException(status_code=422, detail="Failed to generate embedding for the query. Please try a different search term.")
+        
+        # Search for similar news items using cosine similarity
+        # Note: Lower cosine_distance means higher similarity
+        stmt = select(
+            NewsItem,
+            func.cosine_distance(NewsItem.embedding, query_embedding).label("distance")
+        ).filter(
+            NewsItem.embedding.is_not(None)
+        ).order_by(
+            func.cosine_distance(NewsItem.embedding, query_embedding)
+        ).limit(limit)
+        
+        result = await db.execute(stmt)
+        news_items = []
+        
+        for item, distance in result:
+            # Convert SQLAlchemy model to Pydantic model
+            news_item = NewsItemSimilarity.from_orm(item)
+            # Convert distance to similarity score (cosine similarity is between -1 and 1)
+            # Normalize to 0-1 range where 1 is most similar
+            news_item.similarity = (1.0 - float(distance)) / 2.0
+            news_items.append(news_item)
+        
+        return news_items
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Error processing search query: {str(e)}"
+        )
 
 @router.get("/news/trending", response_model=List[NewsItemResponse])
 async def get_trending_news(
