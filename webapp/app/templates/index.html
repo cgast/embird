@@ -3,29 +3,10 @@
 {% block title %}news-suck - Dashboard{% endblock %}
 
 {% block content %}
-<div class="row mb-4">
-    <div class="col">
-        <h1>news-suck Dashboard</h1>
-    </div>
-</div>
 
-<div class="row mb-4">
-    <div class="col-md-4">
-        <div class="card">
-            <div class="card-header bg-primary text-white">
-                <h5 class="card-title mb-0">Statistics</h5>
-            </div>
-            <div class="card-body">
-                <p><strong>Total News Items:</strong> {{ total_news }}</p>
-                <p><strong>Monitored URLs:</strong> {{ urls|length }}</p>
-                <div class="d-grid gap-2">
-                    <a href="/urls/add" class="btn btn-primary">Add New URL</a>
-                    <a href="/urls" class="btn btn-outline-secondary">Manage URLs</a>
-                </div>
-            </div>
-        </div>
-    </div>
-    <div class="col-md-8">
+
+<div class="row">
+    <div class="col">
         <div class="card">
             <div class="card-header bg-info text-white">
                 <h5 class="card-title mb-0">Trending News</h5>
@@ -49,12 +30,13 @@
             </div>
         </div>
     </div>
+
 </div>
 
 <div class="row">
     <div class="col">
         <div class="card">
-            <div class="card-header bg-success text-white">
+            <div class="card-header bg-info  text-white">
                 <h5 class="card-title mb-0">Latest News</h5>
             </div>
             <div class="card-body">
@@ -91,4 +73,25 @@
         </div>
     </div>
 </div>
+
+
+
+<div class="row">
+    <div class="col">
+        <div class="card">
+            <div class="card-header bg-info  text-white">
+                <h5 class="card-title mb-0">Statistics</h5>
+            </div>
+            <div class="card-body">
+                <p><strong>Total News Items:</strong> {{ total_news }}</p>
+                <p><strong>Monitored URLs:</strong> {{ urls|length }}</p>
+                <div class="d-grid gap-2">
+                    <a href="/urls/add" class="btn btn-primary">Add New URL</a>
+                    <a href="/urls" class="btn btn-outline-secondary">Manage URLs</a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
 {% endblock %}
