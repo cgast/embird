@@ -90,11 +90,20 @@ document.addEventListener('DOMContentLoaded', function() {
         noResults.classList.add('d-none');
         searchError.classList.add('d-none');
         
-        // Perform search
-        fetch(`/api/news/search?query=${encodeURIComponent(query)}`)
+        // Get the base URL from the current location
+        const baseUrl = window.location.pathname.split('/search')[0] || '';
+        
+        // Perform search using absolute path
+        fetch(`${baseUrl}/api/news/search?query=${encodeURIComponent(query)}`, {
+            headers: {
+                'Accept': 'application/json'
+            }
+        })
             .then(response => {
                 if (!response.ok) {
-                    throw new Error('Search failed');
+                    return response.json().then(err => {
+                        throw new Error(err.detail || 'Search failed');
+                    });
                 }
                 return response.json();
             })
@@ -125,7 +134,7 @@ document.addEventListener('DOMContentLoaded', function() {
                             <div class="card-body">
                                 <div class="d-flex justify-content-between align-items-start mb-2">
                                     <h5 class="card-title mb-0">
-                                        <a href="/news/${item.id}">${item.title}</a>
+                                        <a href="${baseUrl}/news/${item.id}">${item.title}</a>
                                     </h5>
                                     <span class="badge bg-success">${similarity}% match</span>
                                 </div>
@@ -135,7 +144,7 @@ document.addEventListener('DOMContentLoaded', function() {
                                     <small class="text-muted">
                                         First seen: ${formatDate(item.first_seen_at)}
                                     </small>
-                                    <a href="/news/${item.id}" class="btn btn-sm btn-outline-primary">
+                                    <a href="${baseUrl}/news/${item.id}" class="btn btn-sm btn-outline-primary">
                                         View Details
                                     </a>
                                 </div>
@@ -150,6 +159,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 loadingIndicator.classList.add('d-none');
                 resultsContainer.classList.remove('d-none');
                 searchError.classList.remove('d-none');
+                searchError.querySelector('p').textContent = error.message || 'Error performing search. Please try again.';
                 searchResults.innerHTML = '';
                 console.error('Search error:', error);
             });
