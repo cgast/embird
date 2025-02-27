@@ -10,6 +10,7 @@ from app.models.url import URL, URLCreate, URLDatabase
 from app.models.news import NewsItem, NewsItemResponse, NewsItemSimilarity
 from app.services.db import get_db, url_db
 from app.services.embedding import get_embedding_service, EmbeddingService
+from app.config import settings
 
 router = APIRouter(tags=["api"])
 
@@ -92,11 +93,21 @@ async def search_news(
     query = query.strip()
     
     try:
+        # Verify API key is loaded
+        if not settings.COHERE_API_KEY:
+            raise HTTPException(
+                status_code=422,
+                detail="Cohere API key not configured. Please check environment variables."
+            )
+        
         # Generate embedding for the query
         query_embedding = await embedding_service.get_embedding(query)
         
         if not query_embedding:
-            raise HTTPException(status_code=422, detail="Failed to generate embedding for the query. Please try a different search term.")
+            raise HTTPException(
+                status_code=422,
+                detail="Failed to generate embedding for the query. Please try a different search term."
+            )
         
         # Search for similar news items using cosine similarity
         # Note: Lower cosine_distance means higher similarity
@@ -123,9 +134,14 @@ async def search_news(
         return news_items
         
     except Exception as e:
+        # Add more detailed error information
+        error_detail = str(e)
+        if "cohere" in error_detail.lower():
+            error_detail = "Cohere API error. Please check API key and try again."
+        
         raise HTTPException(
             status_code=422,
-            detail=f"Error processing search query: {str(e)}"
+            detail=f"Error processing search query: {error_detail}"
         )
 
 @router.get("/news/trending", response_model=List[NewsItemResponse])
