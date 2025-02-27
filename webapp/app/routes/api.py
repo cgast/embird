@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func, cast
+from sqlalchemy import select, func, text
 from sqlalchemy.orm import selectinload
 from typing import List, Optional
 from pgvector.sqlalchemy import Vector
@@ -95,25 +95,32 @@ async def search_news(
         if not query_embedding:
             raise HTTPException(status_code=422, detail="Failed to generate embedding")
         
-        # Convert the embedding list to a Vector
-        vector_embedding = Vector(query_embedding)
+        # Use raw SQL with proper vector casting
+        sql = text("""
+            SELECT 
+                news.*,
+                cosine_distance(embedding, :query_vector::vector) as distance
+            FROM news
+            WHERE embedding IS NOT NULL
+            ORDER BY cosine_distance(embedding, :query_vector::vector)
+            LIMIT :limit
+        """)
         
-        # Search for similar news items using cosine similarity
-        stmt = select(
-            NewsItem,
-            func.cosine_distance(NewsItem.embedding, vector_embedding).label("distance")
-        ).filter(
-            NewsItem.embedding.is_not(None)
-        ).order_by(
-            func.cosine_distance(NewsItem.embedding, vector_embedding)
-        ).limit(limit)
+        # Execute the query with parameters
+        result = await db.execute(
+            sql,
+            {
+                "query_vector": query_embedding,
+                "limit": limit
+            }
+        )
         
-        result = await db.execute(stmt)
         news_items = []
-        
-        for item, distance in result:
-            news_item = NewsItemSimilarity.from_orm(item)
-            news_item.similarity = (1.0 - float(distance)) / 2.0
+        for row in result:
+            # Convert row to NewsItemSimilarity
+            news_item = NewsItemSimilarity.from_orm(row)
+            # Calculate similarity score
+            news_item.similarity = (1.0 - float(row.distance)) / 2.0
             news_items.append(news_item)
         
         return news_items
