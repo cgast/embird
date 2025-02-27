@@ -37,6 +37,14 @@ BEGIN
 END
 $$;
 
+-- Create function to convert float array to vector
+CREATE OR REPLACE FUNCTION array_to_vector(arr float[])
+RETURNS vector
+AS $$
+BEGIN
+    RETURN arr::vector;
+END;
+$$ LANGUAGE plpgsql IMMUTABLE;
 
 -- Create news table with vector support
 CREATE TABLE IF NOT EXISTS news (

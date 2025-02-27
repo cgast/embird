@@ -95,25 +95,19 @@ async def search_news(
         if not query_embedding:
             raise HTTPException(status_code=422, detail="Failed to generate embedding")
         
-        # Use raw SQL with proper vector casting
+        # Use raw SQL with array_to_vector function
         sql = text("""
             SELECT 
                 news.*,
-                cosine_distance(embedding, :query_vector::vector) as distance
+                cosine_distance(embedding, array_to_vector($1::float[])) as distance
             FROM news
             WHERE embedding IS NOT NULL
-            ORDER BY cosine_distance(embedding, :query_vector::vector)
-            LIMIT :limit
+            ORDER BY cosine_distance(embedding, array_to_vector($1::float[]))
+            LIMIT $2
         """)
         
         # Execute the query with parameters
-        result = await db.execute(
-            sql,
-            {
-                "query_vector": query_embedding,
-                "limit": limit
-            }
-        )
+        result = await db.execute(sql, [query_embedding, limit])
         
         news_items = []
         for row in result:
