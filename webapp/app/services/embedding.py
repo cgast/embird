@@ -14,47 +14,44 @@ class EmbeddingService:
         
         try:
             self.client = cohere.Client(self.api_key)
-            logging.info("Cohere client initialized successfully")
         except Exception as e:
             logging.error(f"Error initializing Cohere client: {e}")
-            raise
+            raise ValueError(f"Failed to initialize Cohere client: {str(e)}")
     
-    async def get_embedding(self, text: str) -> List[float]:
+    async def get_embedding(self, text: str) -> Optional[List[float]]:
         """Get embedding for a text."""
         if not text or not text.strip():
-            logging.error("Empty text provided for embedding")
             return None
             
         try:
-            # Use async version if available in your Cohere client
-            # For now, this is a synchronous call
             response = self.client.embed(
                 texts=[text],
-                model="embed-english-v3.0",  # Using v3.0 model which provides 1024-dimensional embeddings
-                input_type="search_document",  # Required for v3 models
-                embedding_types=["float"]  # Get float embeddings for maximum precision
+                model="embed-english-v3.0",
+                input_type="search_document",
+                embedding_types=["float"]
             )
             
-            # Log successful embedding generation
-            logging.info(f"Successfully generated embedding for text: {text[:50]}...")
-            
-            # Handle different response types
             if response.response_type == "embeddings_floats":
                 return response.embeddings[0]
             else:  # embeddings_by_type
-                embeddings = response.embeddings.float_  # This is already a list of embeddings
-                return embeddings[0]
+                return response.embeddings.float_[0]
                 
         except Exception as e:
             logging.error(f"Error generating embedding: {e}")
-            # Re-raise with more context
-            raise Exception(f"Failed to generate embedding: {str(e)}")
+            raise ValueError(f"Failed to generate embedding: {str(e)}")
 
+
+_embedding_service = None
 
 def get_embedding_service() -> EmbeddingService:
     """Get embedding service singleton."""
-    try:
-        return EmbeddingService()
-    except Exception as e:
-        logging.error(f"Failed to create EmbeddingService: {e}")
-        raise
+    global _embedding_service
+    
+    if _embedding_service is None:
+        try:
+            _embedding_service = EmbeddingService()
+        except Exception as e:
+            logging.error(f"Failed to create EmbeddingService: {e}")
+            raise ValueError(f"Failed to initialize embedding service: {str(e)}")
+    
+    return _embedding_service

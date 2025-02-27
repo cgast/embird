@@ -28,7 +28,7 @@ async def create_url(url: URLCreate):
     try:
         return url_db.add_url(url)
     except Exception as e:
-        raise HTTPException(status_code=400, detail=f"Error creating URL: {str(e)}")
+        raise HTTPException(status_code=400, detail=str(e))
 
 @router.get("/urls/{url_id}", response_model=URL)
 async def get_url(url_id: int):
@@ -80,26 +80,15 @@ async def get_news_item(news_id: int, db: AsyncSession = Depends(get_db)):
 
 @router.get("/news/search", response_model=List[NewsItemSimilarity])
 async def search_news(
-    request: Request,
     query: str,
     db: AsyncSession = Depends(get_db),
     embedding_service: EmbeddingService = Depends(get_embedding_service),
     limit: int = Query(10, ge=1, le=100)
 ):
     """Search news items by semantic similarity."""
-    # Log request details for debugging
-    logging.info(f"Search request from {request.client.host} with query: {query}")
-    logging.info(f"Headers: {dict(request.headers)}")
-    
     # Validate query
     if not query or not query.strip():
-        raise HTTPException(
-            status_code=422,
-            detail={
-                "error": "Validation error",
-                "message": "Search query cannot be empty"
-            }
-        )
+        raise HTTPException(status_code=422, detail="Search query cannot be empty")
     
     # Clean query
     query = query.strip()
@@ -107,25 +96,13 @@ async def search_news(
     try:
         # Verify API key is loaded
         if not settings.COHERE_API_KEY:
-            raise HTTPException(
-                status_code=422,
-                detail={
-                    "error": "Configuration error",
-                    "message": "Cohere API key not configured"
-                }
-            )
+            raise HTTPException(status_code=422, detail="Cohere API key not configured")
         
         # Generate embedding for the query
         query_embedding = await embedding_service.get_embedding(query)
         
         if not query_embedding:
-            raise HTTPException(
-                status_code=422,
-                detail={
-                    "error": "Embedding error",
-                    "message": "Failed to generate embedding for the query"
-                }
-            )
+            raise HTTPException(status_code=422, detail="Failed to generate embedding")
         
         # Search for similar news items using cosine similarity
         stmt = select(
@@ -149,17 +126,7 @@ async def search_news(
         
     except Exception as e:
         logging.error(f"Search error: {str(e)}")
-        error_detail = {
-            "error": "Search error",
-            "message": str(e)
-        }
-        if "cohere" in str(e).lower():
-            error_detail["message"] = "Error connecting to embedding service"
-        
-        raise HTTPException(
-            status_code=422,
-            detail=error_detail
-        )
+        raise HTTPException(status_code=422, detail=str(e))
 
 @router.get("/news/trending", response_model=List[NewsItemResponse])
 async def get_trending_news(
