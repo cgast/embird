@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func, text
+from sqlalchemy import select, func, cast
 from sqlalchemy.orm import selectinload
 from typing import List, Optional
 from pgvector.sqlalchemy import Vector
@@ -95,29 +95,33 @@ async def search_news(
         if not query_embedding:
             raise HTTPException(status_code=422, detail="Failed to generate embedding")
         
-        # Use raw SQL with array_to_vector function
-        sql = text("""
-            SELECT 
-                news.*,
-                cosine_distance(embedding, array_to_vector($1::float[])) as distance
-            FROM news
-            WHERE embedding IS NOT NULL
-            ORDER BY cosine_distance(embedding, array_to_vector($1::float[]))
-            LIMIT $2
-        """)
+        # Create a Vector object from the embedding
+        embedding_vector = Vector(query_embedding)
         
-        # Execute the query with parameters
-        result = await db.execute(sql, [query_embedding, limit])
+        # Build the query using SQLAlchemy
+        stmt = (
+            select(NewsItem)
+            .filter(NewsItem.embedding.is_not(None))
+            .order_by(func.cosine_distance(NewsItem.embedding, embedding_vector))
+            .limit(limit)
+        )
         
-        news_items = []
-        for row in result:
-            # Convert row to NewsItemSimilarity
-            news_item = NewsItemSimilarity.from_orm(row)
+        result = await db.execute(stmt)
+        news_items = result.scalars().all()
+        
+        # Convert to response models with similarity scores
+        response_items = []
+        for item in news_items:
             # Calculate similarity score
-            news_item.similarity = (1.0 - float(row.distance)) / 2.0
-            news_items.append(news_item)
+            distance = float(func.cosine_distance(item.embedding, embedding_vector))
+            similarity = (1.0 - distance) / 2.0
+            
+            # Create response item
+            news_item = NewsItemSimilarity.from_orm(item)
+            news_item.similarity = similarity
+            response_items.append(news_item)
         
-        return news_items
+        return response_items
         
     except Exception as e:
         logging.error(f"Search error: {str(e)}")
