@@ -123,6 +123,7 @@ async def search_news(
         
         news_items = []
         for row in result:
+            
             # Create a NewsItem instance
             news_item = NewsItem(
                 id=row.id,
@@ -137,11 +138,14 @@ async def search_news(
                 updated_at=row.updated_at
             )
             
-            # Convert to response model with similarity
-            response_item = NewsItemSimilarity.from_orm(news_item)
-            response_item.similarity = (1.0 - float(row.distance)) / 2.0
+            # First create a dictionary with all needed fields
+            item_data = news_item.dict() if hasattr(news_item, 'dict') else news_item.__dict__.copy()
+            item_data['similarity'] = (1.0 - float(row.distance)) / 2.0
+
+            # Then validate the complete data
+            response_item = NewsItemSimilarity.model_validate(item_data)
             news_items.append(response_item)
-        
+
         return news_items
         
     except Exception as e:
