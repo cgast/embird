@@ -97,3 +97,9 @@ body {
     font-size: 0.8rem;
     color: #6c757d;
 }
+
+
+/* edit bootstrap properties */
+:root {
+    --bs-font-sans-serif: "Geist", "Helvetica Neue", Helvetica, Arial, sans-serif;
+  }
