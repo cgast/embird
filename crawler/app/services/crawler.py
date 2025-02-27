@@ -2,9 +2,9 @@ import asyncio
 import feedparser
 import logging
 import httpx
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import List, Dict, Any, Optional
-from sqlalchemy import select
+from sqlalchemy import select, delete, func
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import sessionmaker
 
@@ -39,6 +39,33 @@ class Crawler:
             follow_redirects=True
         )
         self.semaphore = asyncio.Semaphore(settings.MAX_CONCURRENT_REQUESTS)
+
+    async def _cleanup_old_news(self, session: AsyncSession):
+        """Clean up old news items based on retention settings."""
+        try:
+            # Delete items older than retention period
+            retention_date = datetime.utcnow() - timedelta(days=settings.NEWS_RETENTION_DAYS)
+            await session.execute(
+                delete(NewsItem).where(NewsItem.last_seen_at < retention_date)
+            )
+
+            # Get total count of items
+            result = await session.execute(select(func.count(NewsItem.id)))
+            total_items = result.scalar()
+
+            # If we're over the max items limit, delete oldest items
+            if total_items > settings.NEWS_MAX_ITEMS:
+                items_to_delete = total_items - settings.NEWS_MAX_ITEMS
+                subquery = select(NewsItem.id).order_by(NewsItem.last_seen_at.desc()).offset(settings.NEWS_MAX_ITEMS)
+                await session.execute(
+                    delete(NewsItem).where(NewsItem.id.in_(subquery))
+                )
+
+            await session.commit()
+            logger.info("Completed news items cleanup")
+        except Exception as e:
+            logger.error(f"Error during news cleanup: {str(e)}")
+            await session.rollback()
 
     async def crawl_url(self, url_item: URL):
         """Crawl a single URL."""
@@ -140,6 +167,9 @@ class Crawler:
         try:
             # Create a database session
             async with AsyncSessionLocal() as session:
+                # Run cleanup before processing new items
+                await self._cleanup_old_news(session)
+
                 # Check if the URL already exists in the database
                 result = await session.execute(select(NewsItem).filter(NewsItem.url == url))
                 existing_item = result.scalars().first()
