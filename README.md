@@ -11,6 +11,11 @@ An open-source project for crawling RSS feeds and websites, extracting news cont
 - Vector embeddings for semantic search using Cohere API
 - Duplicate detection with hit-counter tracking
 - PostgreSQL vector database for efficient similarity queries
+- News clustering based on semantic similarity
+- Interactive visualizations:
+  - UMAP dimensionality reduction for exploring news relationships
+  - Clustered news articles with similarity scores
+  - Time-based filtering for both clusters and visualizations
 
 ## Architecture
 
@@ -58,6 +63,8 @@ docker-compose up -d
 1. Add URLs to crawl using the web interface
 2. The crawler will automatically fetch content from these URLs hourly
 3. View and search the collected news items
+4. Explore news clusters to find related articles
+5. Use the UMAP visualization to discover content relationships
 
 ## Development
 
@@ -102,6 +109,12 @@ Configuration options can be set via environment variables:
 - `SQLITE_PATH`: Path to the SQLite database file
 - `COHERE_API_KEY`: API key for Cohere embeddings
 - `CRAWLER_INTERVAL`: Interval between crawls in seconds (default: 3600)
+- `MAX_CONCURRENT_REQUESTS`: Maximum number of concurrent requests (default: 5)
+- `REQUEST_TIMEOUT`: Request timeout in seconds (default: 30)
+- `USER_AGENT`: Custom user agent string for the crawler
+- `NEWS_RETENTION_DAYS`: Number of days to keep news items (default: 30)
+- `NEWS_MAX_ITEMS`: Maximum number of news items to keep (default: 10000)
+- `DEBUG`: Enable debug mode (default: False)
 
 ## License
 
@@ -110,4 +123,3 @@ This project is open source and available under the MIT License.
 ## Contributing
 
 Contributions are welcome! Please feel free to submit a Pull Request.
-

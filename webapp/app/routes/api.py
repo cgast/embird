@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, text
 from sqlalchemy.orm import selectinload
-from typing import List, Optional, Dict
+from typing import List, Optional, Dict, Tuple
 from pgvector.sqlalchemy import Vector
 import time
 import logging
@@ -190,7 +190,7 @@ async def search_news(
             )
             
             # First create a dictionary with all needed fields
-            item_data = news_item.dict() if hasattr(news_item, 'dict') else news_item.__dict__.copy()
+            item_data = news_item.__dict__.copy()
             item_data['similarity'] = (1.0 - float(row.distance)) / 2.0
 
             # Then validate the complete data
@@ -203,7 +203,7 @@ async def search_news(
         logging.error(f"Search error: {str(e)}")
         raise HTTPException(status_code=422, detail=str(e))
 
-@router.get("/news/clusters", response_model=Dict[int, List[NewsItemResponse]])
+@router.get("/news/clusters", response_model=Dict[int, List[NewsItemSimilarity]])
 async def get_news_clusters(
     db: AsyncSession = Depends(get_db),
     hours: int = Query(24, ge=1, le=168),  # Default 24 hours, max 1 week
@@ -224,7 +224,7 @@ async def get_news_clusters(
         news_items = result.scalars().all()
         
         # Initialize clusters
-        clusters: Dict[int, List[NewsItem]] = {}
+        clusters: Dict[int, List[Tuple[NewsItem, float]]] = {}  # Store (NewsItem, similarity) pairs
         cluster_vectors: Dict[int, List[float]] = {}
         next_cluster_id = 0
         
@@ -261,23 +261,33 @@ async def get_news_clusters(
                 if similarity >= min_similarity:
                     assigned_cluster = cluster_id
                     # Update cluster vector with new average
-                    cluster_items = clusters[cluster_id]
+                    cluster_items = [item for item, _ in clusters[cluster_id]]
                     all_vectors = [item.embedding for item in cluster_items] + [item_vector]
                     cluster_vectors[cluster_id] = average_vectors(all_vectors)
-                    clusters[cluster_id].append(news_item)
+                    clusters[cluster_id].append((news_item, similarity))
                     break
             
             # If no similar cluster found, create new cluster
             if assigned_cluster is None:
-                clusters[next_cluster_id] = [news_item]
+                clusters[next_cluster_id] = [(news_item, 1.0)]  # Center item has perfect similarity
                 cluster_vectors[next_cluster_id] = item_vector
                 next_cluster_id += 1
         
         # Convert to response format
-        response_clusters = {
-            cluster_id: [NewsItemResponse.model_validate(item.__dict__) for item in items]
-            for cluster_id, items in clusters.items()
-        }
+        response_clusters: Dict[int, List[NewsItemSimilarity]] = {}
+        for cluster_id, items in clusters.items():
+            # Sort items by similarity
+            sorted_items = sorted(items, key=lambda x: x[1], reverse=True)
+            
+            # Convert to NewsItemSimilarity objects
+            response_items = []
+            for item, similarity in sorted_items:
+                item_data = item.__dict__.copy()
+                item_data['similarity'] = similarity
+                response_item = NewsItemSimilarity.model_validate(item_data)
+                response_items.append(response_item)
+            
+            response_clusters[cluster_id] = response_items
         
         return response_clusters
         

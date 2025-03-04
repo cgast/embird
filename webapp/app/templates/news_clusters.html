@@ -5,9 +5,12 @@
 {% block content %}
 <div class="row mb-4">
     <div class="col">
-        <h2>News Clusters</h2>
-        <p class="text-muted">Similar news stories grouped together based on semantic similarity</p>
+        <h1>Cluster</h1>
     </div>
+</div>
+
+<div id="clustersContainer">
+    <!-- Clusters will be loaded here -->
 </div>
 
 <div class="row mb-3">
@@ -19,7 +22,7 @@
             </div>
             <div class="flex-grow-1">
                 <label for="minSimilarity" class="form-label">Minimum Similarity (%)</label>
-                <input type="number" class="form-control" id="minSimilarity" name="minSimilarity" value="20" min="0" max="100">
+                <input type="number" class="form-control" id="minSimilarity" name="minSimilarity" value="60" min="0" max="100">
             </div>
             <div class="align-self-end">
                 <button type="submit" class="btn btn-primary">Update Clusters</button>
@@ -28,28 +31,43 @@
     </div>
 </div>
 
-<div id="clustersContainer">
-    <!-- Clusters will be loaded here -->
-</div>
 
 <template id="clusterTemplate">
     <div class="card mb-4">
         <div class="card-header d-flex justify-content-between align-items-center">
-            <h5 class="mb-0">Cluster #<span class="cluster-number"></span></h5>
+            <h5 class="mb-0"> </h5>
             <span class="badge bg-primary"><span class="article-count"></span> articles</span>
         </div>
         <div class="card-body">
-            <div class="list-group list-group-flush news-items">
-            </div>
+            <details class="cluster-details">
+                <summary class="center-article">
+                    <!-- Center article will be inserted here -->
+                </summary>
+                <div class="list-group list-group-flush related-news mt-3">
+                    <!-- Related articles will be inserted here -->
+                </div>
+            </details>
         </div>
     </div>
+</template>
+
+<template id="centerArticleTemplate">
+    <div class="d-flex w-100 justify-content-between">
+        <h6 class="mb-1 news-title"></h6>
+        <small class="text-muted news-date"></small>
+    </div>
+    <p class="mb-1 news-summary"></p>
+    <small class="text-muted news-source"></small>
 </template>
 
 <template id="newsItemTemplate">
     <a href="#" class="list-group-item list-group-item-action">
         <div class="d-flex w-100 justify-content-between">
             <h6 class="mb-1 news-title"></h6>
-            <small class="text-muted news-date"></small>
+            <div class="d-flex align-items-center">
+                <span class="badge bg-info me-2 similarity-badge"></span>
+                <small class="text-muted news-date"></small>
+            </div>
         </div>
         <p class="mb-1 news-summary"></p>
         <small class="text-muted news-source"></small>
@@ -63,6 +81,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const clusterForm = document.getElementById('clusterForm');
     const clustersContainer = document.getElementById('clustersContainer');
     const clusterTemplate = document.getElementById('clusterTemplate');
+    const centerArticleTemplate = document.getElementById('centerArticleTemplate');
     const newsItemTemplate = document.getElementById('newsItemTemplate');
 
     async function loadClusters() {
@@ -100,12 +119,24 @@ document.addEventListener('DOMContentLoaded', function() {
         Object.entries(clusters).forEach(([clusterId, newsItems], index) => {
             const clusterElement = clusterTemplate.content.cloneNode(true);
             
-            clusterElement.querySelector('.cluster-number').textContent = index + 1;
+            //clusterElement.querySelector('.cluster-number').textContent = index + 1;
             clusterElement.querySelector('.article-count').textContent = newsItems.length;
             
-            const newsListContainer = clusterElement.querySelector('.news-items');
+            // Get the center article (first item in the sorted list)
+            const centerArticle = newsItems[0];
+            const centerElement = centerArticleTemplate.content.cloneNode(true);
             
-            newsItems.forEach(item => {
+            // Populate center article
+            centerElement.querySelector('.news-title').textContent = centerArticle.title;
+            centerElement.querySelector('.news-summary').textContent = centerArticle.summary || 'No summary available';
+            centerElement.querySelector('.news-source').textContent = new URL(centerArticle.source_url).hostname;
+            centerElement.querySelector('.news-date').textContent = new Date(centerArticle.last_seen_at).toLocaleDateString();
+            
+            clusterElement.querySelector('.center-article').appendChild(centerElement);
+            
+            // Add related articles (skip the first/center article)
+            const relatedContainer = clusterElement.querySelector('.related-news');
+            newsItems.slice(1).forEach(item => {
                 const newsElement = newsItemTemplate.content.cloneNode(true);
                 const link = newsElement.querySelector('a');
                 
@@ -115,7 +146,11 @@ document.addEventListener('DOMContentLoaded', function() {
                 link.querySelector('.news-source').textContent = new URL(item.source_url).hostname;
                 link.querySelector('.news-date').textContent = new Date(item.last_seen_at).toLocaleDateString();
                 
-                newsListContainer.appendChild(newsElement);
+                // Add similarity badge
+                const similarityPercent = Math.round(item.similarity * 100);
+                link.querySelector('.similarity-badge').textContent = `${similarityPercent}%`;
+                
+                relatedContainer.appendChild(newsElement);
             });
             
             clustersContainer.appendChild(clusterElement);
@@ -131,4 +166,45 @@ document.addEventListener('DOMContentLoaded', function() {
     loadClusters();
 });
 </script>
+
+<style>
+.cluster-details {
+    cursor: pointer;
+}
+
+.cluster-details summary {
+    list-style: none;
+    padding: 1rem;
+    margin: -1rem;
+    border-radius: 0.25rem;
+    transition: background-color 0.2s;
+}
+
+.cluster-details summary:hover {
+    background-color: rgba(0, 0, 0, 0.03);
+}
+
+.cluster-details summary::marker {
+    display: none;
+}
+
+.cluster-details summary::-webkit-details-marker {
+    display: none;
+}
+
+.cluster-details summary::after {
+    content: '▼';
+    float: right;
+    transform: rotate(-90deg);
+    transition: transform 0.2s;
+}
+
+.cluster-details[open] summary::after {
+    transform: rotate(0);
+}
+
+.similarity-badge {
+    font-size: 0.75rem;
+}
+</style>
 {% endblock %}

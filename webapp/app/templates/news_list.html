@@ -5,45 +5,15 @@
 {% block content %}
 <div class="row mb-4">
     <div class="col">
-        <h1>News</h1>
+        <h2>News</h2>
         {% if current_source %}
-        <p class="lead">Showing news from: <strong>{{ current_source }}</strong></p>
+        <p>Showing news from: <strong>{{ current_source }}</strong></p>
         {% else %}
-        <p class="lead">All news items from monitored sources.</p>
+        <p>All news items from monitored sources.</p>
         {% endif %}
     </div>
 </div>
 
-<div class="row mb-4">
-    <div class="col">
-        <div class="card">
-            <div class="card-header bg-light">
-                <h5 class="card-title mb-0">Filter</h5>
-            </div>
-            <div class="card-body">
-                <form method="get" action="/news" class="row g-3">
-                    <div class="col-md-6">
-                        <label for="source_url" class="form-label">Source</label>
-                        <select class="form-select" id="source_url" name="source_url">
-                            <option value="">All Sources</option>
-                            {% for url in urls %}
-                            <option value="{{ url.url }}" {% if current_source == url.url %}selected{% endif %}>
-                                {{ url.url }} ({{ url.type }})
-                            </option>
-                            {% endfor %}
-                        </select>
-                    </div>
-                    <div class="col-12">
-                        <button type="submit" class="btn btn-primary">Apply Filter</button>
-                        {% if current_source %}
-                        <a href="/news" class="btn btn-outline-secondary">Clear Filter</a>
-                        {% endif %}
-                    </div>
-                </form>
-            </div>
-        </div>
-    </div>
-</div>
 
 <div class="card">
     <div class="card-body">
@@ -56,7 +26,6 @@
                         <th>Source</th>
                         <th>First Seen</th>
                         <th>Last Seen</th>
-                        <th>Hits</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -66,7 +35,6 @@
                         <td>{{ item.source_url }}</td>
                         <td>{{ item.first_seen_at.strftime('%Y-%m-%d %H:%M') }}</td>
                         <td>{{ item.last_seen_at.strftime('%Y-%m-%d %H:%M') }}</td>
-                        <td>{{ item.hit_count }}</td>
                     </tr>
                     {% endfor %}
                 </tbody>
@@ -107,4 +75,36 @@
         {% endif %}
     </div>
 </div>
+
+<div class="row mb-4">
+    <div class="col">
+        <div class="card">
+            <div class="card-header bg-light">
+                <h5 class="card-title mb-0">Filter</h5>
+            </div>
+            <div class="card-body">
+                <form method="get" action="/news" class="row g-3">
+                    <div class="col-md-6">
+                        <label for="source_url" class="form-label">Source</label>
+                        <select class="form-select" id="source_url" name="source_url">
+                            <option value="">All Sources</option>
+                            {% for url in urls %}
+                            <option value="{{ url.url }}" {% if current_source == url.url %}selected{% endif %}>
+                                {{ url.url }} ({{ url.type }})
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-12">
+                        <button type="submit" class="btn btn-primary">Apply Filter</button>
+                        {% if current_source %}
+                        <a href="/news" class="btn btn-outline-secondary">Clear Filter</a>
+                        {% endif %}
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
 {% endblock %}
