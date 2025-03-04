@@ -17,4 +17,6 @@ feedparser==6.0.10
 beautifulsoup4==4.12.2
 lxml==4.9.3
 pgvector==0.2.3
-
+numpy==1.23.5 
+scikit-learn==1.2.2
+umap-learn==0.5.5

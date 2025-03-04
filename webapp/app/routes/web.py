@@ -194,3 +194,19 @@ async def search_form(request: Request):
         "search.html",
         {"request": request}
     )
+
+@router.get("/clusters", response_class=HTMLResponse)
+async def view_clusters(request: Request):
+    """Render the news clusters page."""
+    return request.state.templates.TemplateResponse(
+        "news_clusters.html",
+        {"request": request}
+    )
+
+@router.get("/umap", response_class=HTMLResponse)
+async def view_umap(request: Request):
+    """Render the UMAP visualization page."""
+    return request.state.templates.TemplateResponse(
+        "news_umap.html",
+        {"request": request}
+    )

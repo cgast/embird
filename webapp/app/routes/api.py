@@ -2,11 +2,14 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, text
 from sqlalchemy.orm import selectinload
-from typing import List, Optional
+from typing import List, Optional, Dict
 from pgvector.sqlalchemy import Vector
 import time
 import logging
+from datetime import datetime, timedelta
 from sqlalchemy.dialects.postgresql import ARRAY, FLOAT
+import numpy as np
+import umap
 
 from app.models.url import URL, URLCreate, URLDatabase
 from app.models.news import NewsItem, NewsItemResponse, NewsItemSimilarity
@@ -14,7 +17,57 @@ from app.services.db import get_db, url_db
 from app.services.embedding import get_embedding_service, EmbeddingService
 from app.config import settings
 
+logger = logging.getLogger(__name__)
+
 router = APIRouter(tags=["api"])
+
+@router.get("/news/umap", response_model=List[dict])
+async def get_news_umap(
+    db: AsyncSession = Depends(get_db),
+    hours: int = Query(24, ge=1, le=168),  # Default 24 hours, max 1 week
+):
+    """Get UMAP visualization data for news items."""
+    try:
+        # Get news items from the last n hours
+        time_filter = datetime.utcnow() - timedelta(hours=hours)
+        
+        # Get all news items with embeddings from the specified time period
+        stmt = select(NewsItem).filter(
+            NewsItem.last_seen_at >= time_filter,
+            NewsItem.embedding.is_not(None)
+        ).order_by(NewsItem.last_seen_at.desc())
+        
+        result = await db.execute(stmt)
+        news_items = result.scalars().all()
+        
+        if not news_items:
+            return []
+
+        # Extract embeddings and create UMAP input
+        embeddings = [item.embedding for item in news_items]
+        
+        # Perform UMAP dimensionality reduction
+        reducer = umap.UMAP(n_components=2, random_state=42)
+        umap_result = reducer.fit_transform(embeddings)
+        
+        # Combine UMAP coordinates with news items
+        visualization_data = []
+        for i, news_item in enumerate(news_items):
+            visualization_data.append({
+                "id": news_item.id,
+                "title": news_item.title,
+                "url": news_item.url,
+                "source_url": news_item.source_url,
+                "last_seen_at": news_item.last_seen_at.isoformat(),
+                "x": float(umap_result[i][0]),
+                "y": float(umap_result[i][1])
+            })
+        
+        return visualization_data
+        
+    except Exception as e:
+        logging.error(f"UMAP visualization error: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 # ---- URL Endpoints ----
 
@@ -68,7 +121,6 @@ async def get_news(
     
     return news_items
 
-# Important: Place specific routes before parameterized routes
 @router.get("/news/search", response_model=List[NewsItemSimilarity])
 async def search_news(
     query: str,
@@ -98,17 +150,16 @@ async def search_news(
         # Convert embedding to string representation
         vector_str = f"[{','.join(str(x) for x in query_embedding)}]"
         
-        
         # Modified SQL using cast() function instead of :: operator
         stmt = text("""
             SELECT 
                 id, title, summary, url, source_url, 
                 first_seen_at, last_seen_at, hit_count,
                 created_at, updated_at,
-                cosine_distance(embedding, cast(:vector as vector)) as distance
+                cosine_distance(embedding, cast(:vector as vector(1024))) as distance
             FROM news
             WHERE embedding IS NOT NULL
-            ORDER BY cosine_distance(embedding, cast(:vector as vector))
+            ORDER BY cosine_distance(embedding, cast(:vector as vector(1024)))
             LIMIT :limit
         """)
 
@@ -152,6 +203,88 @@ async def search_news(
         logging.error(f"Search error: {str(e)}")
         raise HTTPException(status_code=422, detail=str(e))
 
+@router.get("/news/clusters", response_model=Dict[int, List[NewsItemResponse]])
+async def get_news_clusters(
+    db: AsyncSession = Depends(get_db),
+    hours: int = Query(24, ge=1, le=168),  # Default 24 hours, max 1 week
+    min_similarity: float = Query(0.2, ge=0.0, le=1.0)  # Default 20% similarity
+):
+    """Get clustered news items based on vector similarity."""
+    try:
+        # Get news items from the last n hours
+        time_filter = datetime.utcnow() - timedelta(hours=hours)
+        
+        # Get all news items with embeddings from the specified time period
+        stmt = select(NewsItem).filter(
+            NewsItem.last_seen_at >= time_filter,
+            NewsItem.embedding.is_not(None)
+        ).order_by(NewsItem.last_seen_at.desc())
+        
+        result = await db.execute(stmt)
+        news_items = result.scalars().all()
+        
+        # Initialize clusters
+        clusters: Dict[int, List[NewsItem]] = {}
+        cluster_vectors: Dict[int, List[float]] = {}
+        next_cluster_id = 0
+        
+        # Helper function to calculate average vector
+        def average_vectors(vectors: List[List[float]]) -> List[float]:
+            if not vectors:
+                return []
+            return [sum(x) / len(vectors) for x in zip(*vectors)]
+        
+        logger.info("Processing news items %s", len(news_items))
+
+        # Process each news item
+        for news_item in news_items:
+            item_vector = news_item.embedding
+            assigned_cluster = None
+            
+            logger.info("Processing news item %s", news_item.title)
+
+            # Check similarity with existing clusters
+            for cluster_id, cluster_vector in cluster_vectors.items():
+                # Calculate cosine similarity using PostgreSQL's function with explicit vector dimension
+                similarity_stmt = text(
+                    "SELECT (1 - cosine_distance(cast(:vec1 as vector(1024)), cast(:vec2 as vector(1024)))) as similarity"
+                )
+                similarity_result = await db.execute(
+                    similarity_stmt,
+                    {
+                        "vec1": f"[{','.join(str(x) for x in item_vector)}]",
+                        "vec2": f"[{','.join(str(x) for x in cluster_vector)}]"
+                    }
+                )
+                similarity = similarity_result.scalar()
+                
+                if similarity >= min_similarity:
+                    assigned_cluster = cluster_id
+                    # Update cluster vector with new average
+                    cluster_items = clusters[cluster_id]
+                    all_vectors = [item.embedding for item in cluster_items] + [item_vector]
+                    cluster_vectors[cluster_id] = average_vectors(all_vectors)
+                    clusters[cluster_id].append(news_item)
+                    break
+            
+            # If no similar cluster found, create new cluster
+            if assigned_cluster is None:
+                clusters[next_cluster_id] = [news_item]
+                cluster_vectors[next_cluster_id] = item_vector
+                next_cluster_id += 1
+        
+        # Convert to response format
+        response_clusters = {
+            cluster_id: [NewsItemResponse.model_validate(item.__dict__) for item in items]
+            for cluster_id, items in clusters.items()
+        }
+        
+        return response_clusters
+        
+    except Exception as e:
+        logging.error(f"Clustering error: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 @router.get("/news/trending", response_model=List[NewsItemResponse])
 async def get_trending_news(
     db: AsyncSession = Depends(get_db),
@@ -174,7 +307,6 @@ async def get_trending_news(
     
     return news_items
 
-# Place parameterized routes last
 @router.get("/news/{news_id}", response_model=NewsItemResponse)
 async def get_news_item(news_id: int, db: AsyncSession = Depends(get_db)):
     """Get a news item by ID."""

@@ -1,0 +1,134 @@
+{% extends "base.html" %}
+
+{% block title %}News Clusters - news-suck{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col">
+        <h2>News Clusters</h2>
+        <p class="text-muted">Similar news stories grouped together based on semantic similarity</p>
+    </div>
+</div>
+
+<div class="row mb-3">
+    <div class="col">
+        <form id="clusterForm" class="d-flex gap-3">
+            <div class="flex-grow-1">
+                <label for="hours" class="form-label">Time Range (hours)</label>
+                <input type="number" class="form-control" id="hours" name="hours" value="24" min="1" max="168">
+            </div>
+            <div class="flex-grow-1">
+                <label for="minSimilarity" class="form-label">Minimum Similarity (%)</label>
+                <input type="number" class="form-control" id="minSimilarity" name="minSimilarity" value="20" min="0" max="100">
+            </div>
+            <div class="align-self-end">
+                <button type="submit" class="btn btn-primary">Update Clusters</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div id="clustersContainer">
+    <!-- Clusters will be loaded here -->
+</div>
+
+<template id="clusterTemplate">
+    <div class="card mb-4">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <h5 class="mb-0">Cluster #<span class="cluster-number"></span></h5>
+            <span class="badge bg-primary"><span class="article-count"></span> articles</span>
+        </div>
+        <div class="card-body">
+            <div class="list-group list-group-flush news-items">
+            </div>
+        </div>
+    </div>
+</template>
+
+<template id="newsItemTemplate">
+    <a href="#" class="list-group-item list-group-item-action">
+        <div class="d-flex w-100 justify-content-between">
+            <h6 class="mb-1 news-title"></h6>
+            <small class="text-muted news-date"></small>
+        </div>
+        <p class="mb-1 news-summary"></p>
+        <small class="text-muted news-source"></small>
+    </a>
+</template>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const clusterForm = document.getElementById('clusterForm');
+    const clustersContainer = document.getElementById('clustersContainer');
+    const clusterTemplate = document.getElementById('clusterTemplate');
+    const newsItemTemplate = document.getElementById('newsItemTemplate');
+
+    async function loadClusters() {
+        const hours = document.getElementById('hours').value;
+        const minSimilarity = document.getElementById('minSimilarity').value / 100;
+
+        try {
+            const response = await fetch(`/api/news/clusters?hours=${hours}&min_similarity=${minSimilarity}`);
+            if (!response.ok) throw new Error('Failed to load clusters');
+            
+            const clusters = await response.json();
+            displayClusters(clusters);
+        } catch (error) {
+            console.error('Error loading clusters:', error);
+            clustersContainer.innerHTML = `
+                <div class="alert alert-danger">
+                    Failed to load news clusters. Please try again later.
+                </div>
+            `;
+        }
+    }
+
+    function displayClusters(clusters) {
+        clustersContainer.innerHTML = '';
+        
+        if (Object.keys(clusters).length === 0) {
+            clustersContainer.innerHTML = `
+                <div class="alert alert-info">
+                    No news clusters found for the selected criteria.
+                </div>
+            `;
+            return;
+        }
+
+        Object.entries(clusters).forEach(([clusterId, newsItems], index) => {
+            const clusterElement = clusterTemplate.content.cloneNode(true);
+            
+            clusterElement.querySelector('.cluster-number').textContent = index + 1;
+            clusterElement.querySelector('.article-count').textContent = newsItems.length;
+            
+            const newsListContainer = clusterElement.querySelector('.news-items');
+            
+            newsItems.forEach(item => {
+                const newsElement = newsItemTemplate.content.cloneNode(true);
+                const link = newsElement.querySelector('a');
+                
+                link.href = item.url;
+                link.querySelector('.news-title').textContent = item.title;
+                link.querySelector('.news-summary').textContent = item.summary || 'No summary available';
+                link.querySelector('.news-source').textContent = new URL(item.source_url).hostname;
+                link.querySelector('.news-date').textContent = new Date(item.last_seen_at).toLocaleDateString();
+                
+                newsListContainer.appendChild(newsElement);
+            });
+            
+            clustersContainer.appendChild(clusterElement);
+        });
+    }
+
+    clusterForm.addEventListener('submit', function(e) {
+        e.preventDefault();
+        loadClusters();
+    });
+
+    // Initial load
+    loadClusters();
+});
+</script>
+{% endblock %}
