@@ -3,6 +3,14 @@
 {% block title %}News UMAP Visualization - news-suck{% endblock %}
 
 {% block content %}
+<!-- Server data -->
+<script type="application/json" id="serverData">
+{
+    "error": {% if error %}{{ error | tojson | safe }}{% else %}null{% endif %},
+    "visualization": {% if initial_visualization %}{{ initial_visualization | tojson | safe }}{% else %}null{% endif %}
+}
+</script>
+
 <div class="row mb-4">
     <div class="col">
         <h2>Visualization</h2>
@@ -14,7 +22,7 @@
         <form id="umapForm" class="d-flex gap-3">
             <div class="flex-grow-1">
                 <label for="hours" class="form-label">Time Range (hours)</label>
-                <input type="number" class="form-control" id="hours" name="hours" value="24" min="1" max="168">
+                <input type="number" class="form-control" id="hours" name="hours" value="{{ hours }}" min="1" max="168">
             </div>
             <div class="align-self-end">
                 <button type="submit" class="btn btn-primary">Update Visualization</button>
@@ -45,25 +53,35 @@ document.addEventListener('DOMContentLoaded', function() {
     const umapForm = document.getElementById('umapForm');
     const tooltip = document.getElementById('tooltip');
     let svg;
+    
+    // Parse server data
+    const serverData = JSON.parse(document.getElementById('serverData').textContent);
 
     async function loadVisualization() {
         const hours = document.getElementById('hours').value;
 
         try {
-            const response = await fetch(`/api/news/umap?hours=${hours}`);
-            if (!response.ok) throw new Error('Failed to load visualization data');
-            
-            const data = await response.json();
-            if (data.length === 0) {
-                document.getElementById('visualization').innerHTML = `
-                    <div class="alert alert-info">
-                        No news articles found for the selected time range.
-                    </div>
-                `;
-                return;
+            // First try to load from the current page with the new parameters
+            const response = await fetch(`/umap?hours=${hours}`);
+            if (!response.ok) {
+                // If that fails, fall back to the API
+                const apiResponse = await fetch(`/api/news/umap?hours=${hours}`);
+                if (!apiResponse.ok) throw new Error('Failed to load visualization data');
+                const data = await apiResponse.json();
+                if (data.length === 0) {
+                    document.getElementById('visualization').innerHTML = `
+                        <div class="alert alert-info">
+                            No news articles found for the selected time range.
+                        </div>
+                    `;
+                    return;
+                }
+                createVisualization(data);
+            } else {
+                // If the page load succeeds, replace the current page
+                const html = await response.text();
+                document.documentElement.innerHTML = html;
             }
-            
-            createVisualization(data);
         } catch (error) {
             console.error('Error loading visualization:', error);
             document.getElementById('visualization').innerHTML = `
@@ -144,8 +162,18 @@ document.addEventListener('DOMContentLoaded', function() {
         loadVisualization();
     });
 
-    // Initial load
-    loadVisualization();
+    // Initialize with server data
+    if (serverData.error) {
+        document.getElementById('visualization').innerHTML = `
+            <div class="alert alert-danger">
+                ${serverData.error}
+            </div>
+        `;
+    } else if (serverData.visualization) {
+        createVisualization(serverData.visualization);
+    } else {
+        loadVisualization();
+    }
 });
 </script>
 {% endblock %}

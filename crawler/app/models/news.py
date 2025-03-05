@@ -1,6 +1,6 @@
 from datetime import datetime
 from typing import List, Optional, Any
-from sqlalchemy import Column, Integer, String, Text, DateTime, ForeignKey, func, UniqueConstraint
+from sqlalchemy import Column, Integer, String, Text, DateTime, ForeignKey, func, UniqueConstraint, JSON
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.dialects.postgresql import ARRAY, FLOAT
 from pgvector.sqlalchemy import Vector
@@ -26,6 +26,38 @@ class NewsItem(Base):
     
     def __repr__(self):
         return f"<NewsItem(id={self.id}, title={self.title}, url={self.url})>"
+
+
+class NewsUMAP(Base):
+    """SQLAlchemy model for pre-generated UMAP visualizations."""
+    __tablename__ = "news_umap"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    hours = Column(Integer, nullable=False, unique=True)
+    visualization = Column(JSON, nullable=False)  # Store visualization data as JSON
+    created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    
+    def __repr__(self):
+        return f"<NewsUMAP(hours={self.hours})>"
+
+
+
+class NewsClusters(Base):
+    """SQLAlchemy model for pre-generated news clusters."""
+    __tablename__ = "news_clusters"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    hours = Column(Integer, nullable=False)
+    min_similarity = Column(FLOAT, nullable=False)
+    clusters = Column(JSON, nullable=False)  # Store clusters as JSON
+    created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    
+    __table_args__ = (
+        UniqueConstraint('hours', 'min_similarity', name='uix_hours_similarity'),
+    )
+    
+    def __repr__(self):
+        return f"<NewsClusters(hours={self.hours}, min_similarity={self.min_similarity})>"
 
 
 # Pydantic models for API

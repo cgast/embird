@@ -2,13 +2,19 @@ from fastapi import APIRouter, Request, Form, Depends, HTTPException, Query
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, text
-from typing import List, Optional
+from typing import List, Optional, Dict
 import time
+from datetime import datetime
 
 from app.models.url import URL, URLCreate, URLDatabase
-from app.models.news import NewsItem
+from app.models.news import NewsItem, NewsClusters, NewsUMAP
 from app.services.db import get_db, url_db
+from app.services.visualization import generate_clusters, generate_umap_visualization
 
+
+# Configure logging
+import logging
+logger = logging.getLogger(__name__)    
 router = APIRouter()
 
 @router.get("/", response_class=HTMLResponse)
@@ -196,17 +202,121 @@ async def search_form(request: Request):
     )
 
 @router.get("/clusters", response_class=HTMLResponse)
-async def view_clusters(request: Request):
+async def view_clusters(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    hours: int = Query(24, ge=1, le=168),
+    min_similarity: float = Query(0.6, ge=0.0, le=1.0)
+):
     """Render the news clusters page."""
-    return request.state.templates.TemplateResponse(
-        "news_clusters.html",
-        {"request": request}
-    )
+    try:
+        # Try to get pre-generated clusters
+        result = await db.execute(
+            select(NewsClusters).filter(
+                NewsClusters.hours == hours,
+                NewsClusters.min_similarity == min_similarity
+            ).order_by(NewsClusters.created_at.desc())
+        )
+        clusters = result.scalars().first()
+        
+        # If no pre-generated clusters found, generate them
+        if not clusters:
+            clusters_data = await generate_clusters(db, hours, min_similarity)
+        else:
+            clusters_data = clusters.clusters
+            
+        # Convert clusters data to JSON-serializable format
+        serializable_clusters: Dict[str, List[dict]] = {}
+        for cluster_id, items in clusters_data.items():
+            serializable_items = []
+            for item in items:
+                # Check if item is a Pydantic model or an ORM model
+                if hasattr(item, '__dict__') and not isinstance(item, dict):
+                    # Convert each NewsItemSimilarity to a dict with only needed fields
+                    item_dict = {
+                        'id': item.id,
+                        'title': item.title,
+                        'summary': item.summary,
+                        'url': item.url,
+                        'source_url': item.source_url,
+                        'first_seen_at': item.first_seen_at.isoformat() if hasattr(item.first_seen_at, 'isoformat') else item.first_seen_at,
+                        'last_seen_at': item.last_seen_at.isoformat() if hasattr(item.last_seen_at, 'isoformat') else item.last_seen_at,
+                        'hit_count': item.hit_count,
+                        'created_at': item.created_at.isoformat() if hasattr(item.created_at, 'isoformat') else item.created_at,
+                        'updated_at': item.updated_at.isoformat() if hasattr(item.updated_at, 'isoformat') else item.updated_at,
+                        'similarity': item.similarity
+                    }
+                else:
+                    # Item is already a dictionary
+                    item_dict = {
+                        'id': item.get('id'),
+                        'title': item.get('title', ''),
+                        'summary': item.get('summary'),
+                        'url': item.get('url', ''),
+                        'source_url': item.get('source_url', ''),
+                        'first_seen_at': item.get('first_seen_at', datetime.now().isoformat()),
+                        'last_seen_at': item.get('last_seen_at', datetime.now().isoformat()),
+                        'hit_count': item.get('hit_count', 1),
+                        'created_at': item.get('created_at', datetime.now().isoformat()),
+                        'updated_at': item.get('updated_at', datetime.now().isoformat()),
+                        'similarity': item.get('similarity', 0.5)
+                    }
+                serializable_items.append(item_dict)
+            serializable_clusters[str(cluster_id)] = serializable_items
+        
+        return request.state.templates.TemplateResponse(
+            "news_clusters.html",
+            {
+                "request": request,
+                "initial_clusters": serializable_clusters,
+                "hours": hours,
+                "min_similarity": min_similarity * 100  # Convert to percentage for display
+            }
+        )
+    except Exception as e:
+        logger.error(f"Error loading clusters: {str(e)}")
+        return request.state.templates.TemplateResponse(
+            "news_clusters.html",
+            {
+                "request": request,
+                "error": "Failed to load clusters. Please try again later."
+            }
+        )
 
 @router.get("/umap", response_class=HTMLResponse)
-async def view_umap(request: Request):
+async def view_umap(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    hours: int = Query(24, ge=1, le=168)
+):
     """Render the UMAP visualization page."""
-    return request.state.templates.TemplateResponse(
-        "news_umap.html",
-        {"request": request}
-    )
+    try:
+        # Try to get pre-generated visualization
+        result = await db.execute(
+            select(NewsUMAP).filter(NewsUMAP.hours == hours).order_by(NewsUMAP.created_at.desc())
+        )
+        umap_data = result.scalars().first()
+        
+        # If no pre-generated visualization found, generate it
+        if not umap_data:
+            visualization_data = await generate_umap_visualization(db, hours)
+        else:
+            visualization_data = umap_data.visualization
+        
+        return request.state.templates.TemplateResponse(
+            "news_umap.html",
+            {
+                "request": request,
+                "initial_visualization": visualization_data,
+                "hours": hours
+            }
+        )
+    except Exception as e:
+        logger.error(f"Error loading UMAP visualization: {str(e)}")
+        return request.state.templates.TemplateResponse(
+            "news_umap.html",
+            {
+                "request": request,
+                "error": "Failed to load visualization. Please try again later."
+            }
+        )

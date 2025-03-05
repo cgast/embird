@@ -73,3 +73,27 @@ CREATE INDEX IF NOT EXISTS news_last_seen_idx ON news(last_seen_at);
 
 -- Create vector index for similarity search
 CREATE INDEX IF NOT EXISTS news_embedding_idx ON news USING ivfflat (embedding vector_cosine_ops) WITH (lists = 100);
+
+-- Create table for pre-generated news clusters
+CREATE TABLE IF NOT EXISTS news_clusters (
+    id SERIAL PRIMARY KEY,
+    hours INTEGER NOT NULL,
+    min_similarity FLOAT NOT NULL,
+    clusters JSONB NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+    UNIQUE(hours, min_similarity)
+);
+
+-- Create index on hours and min_similarity for quick lookups
+CREATE INDEX IF NOT EXISTS news_clusters_lookup_idx ON news_clusters(hours, min_similarity);
+
+-- Create table for pre-generated UMAP visualizations
+CREATE TABLE IF NOT EXISTS news_umap (
+    id SERIAL PRIMARY KEY,
+    hours INTEGER NOT NULL UNIQUE,
+    visualization JSONB NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+);
+
+-- Create index on hours for quick lookups
+CREATE INDEX IF NOT EXISTS news_umap_hours_idx ON news_umap(hours);

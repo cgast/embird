@@ -13,6 +13,7 @@ from app.models.url import URL, URLDatabase
 from app.models.news import NewsItem, NewsItemCreate
 from app.services.extractor import ContentExtractor
 from app.services.embedding import EmbeddingService
+from app.services.redis_client import get_redis_client
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -45,9 +46,8 @@ class Crawler:
         try:
             # Delete items older than retention period
             retention_date = datetime.utcnow() - timedelta(days=settings.NEWS_RETENTION_DAYS)
-            await session.execute(
-                delete(NewsItem).where(NewsItem.last_seen_at < retention_date)
-            )
+            delete_stmt = delete(NewsItem).where(NewsItem.last_seen_at < retention_date)
+            await session.execute(delete_stmt)
 
             # Get total count of items
             result = await session.execute(select(func.count(NewsItem.id)))
@@ -179,6 +179,37 @@ class Crawler:
                     existing_item.hit_count += 1
                     existing_item.last_seen_at = datetime.utcnow()
                     await session.commit()
+                    
+                    # Update the item in Redis too
+                    try:
+                        redis_client = await get_redis_client()
+                        metadata = {
+                            "title": existing_item.title,
+                            "url": existing_item.url,
+                            "source_url": existing_item.source_url
+                        }
+                        
+                        # Convert numpy array to list if needed
+                        embedding = None
+                        if existing_item.embedding is not None:
+                            # Check if it's a numpy array
+                            if hasattr(existing_item.embedding, 'tolist'):
+                                embedding = existing_item.embedding.tolist()
+                            else:
+                                embedding = existing_item.embedding
+                            
+                            # Only proceed if we have a valid embedding
+                            if embedding is not None:
+                                print(f"CRAWLER DEBUG: Attempting to store vector for existing item {existing_item.id}")
+                                await redis_client.store_vector(
+                                    news_id=existing_item.id,
+                                    embedding=embedding,
+                                    metadata=metadata
+                                )
+                                print(f"CRAWLER DEBUG: Successfully stored vector for existing item {existing_item.id}")
+                    except Exception as redis_error:
+                        print(f"CRAWLER DEBUG: Redis error when updating existing item: {redis_error}")
+                    
                     logger.info(f"Updated existing news item: {title}")
                 else:
                     # Get content and summary for new item
@@ -213,6 +244,36 @@ class Crawler:
                     # Add to database
                     session.add(news_item)
                     await session.commit()
+                    
+                    # Also store in Redis for fast access
+                    try:
+                        redis_client = await get_redis_client()
+                        metadata = {
+                            "title": title,
+                            "url": url,
+                            "source_url": source_url
+                        }
+                        
+                        # Ensure embedding is a list (not a numpy array)
+                        embedding_list = None
+                        if embedding is not None:
+                            if hasattr(embedding, 'tolist'):
+                                embedding_list = embedding.tolist()
+                            else:
+                                embedding_list = embedding
+                        
+                        # Only proceed if we have a valid embedding
+                        if embedding_list is not None:
+                            print(f"CRAWLER DEBUG: Attempting to store vector for new item {news_item.id}")
+                            await redis_client.store_vector(
+                                news_id=news_item.id,
+                                embedding=embedding_list,
+                                metadata=metadata
+                            )
+                            print(f"CRAWLER DEBUG: Successfully stored vector for new item {news_item.id}")
+                    except Exception as redis_error:
+                        print(f"CRAWLER DEBUG: Redis error when storing new item: {redis_error}")
+                    
                     logger.info(f"Added new news item: {title}")
         
         except Exception as e:

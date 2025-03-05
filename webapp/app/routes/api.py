@@ -12,9 +12,14 @@ import numpy as np
 import umap
 
 from app.models.url import URL, URLCreate, URLDatabase
-from app.models.news import NewsItem, NewsItemResponse, NewsItemSimilarity
+from app.models.news import (
+    NewsItem, NewsItemResponse, NewsItemSimilarity,
+    NewsClusters, NewsUMAP,
+    NewsClustersResponse, NewsUMAPResponse
+)
 from app.services.db import get_db, url_db
 from app.services.embedding import get_embedding_service, EmbeddingService
+from app.services.visualization import generate_clusters, generate_umap_visualization
 from app.config import settings
 
 logger = logging.getLogger(__name__)
@@ -28,42 +33,17 @@ async def get_news_umap(
 ):
     """Get UMAP visualization data for news items."""
     try:
-        # Get news items from the last n hours
-        time_filter = datetime.utcnow() - timedelta(hours=hours)
+        # Try to get pre-generated visualization
+        result = await db.execute(
+            select(NewsUMAP).filter(NewsUMAP.hours == hours).order_by(NewsUMAP.created_at.desc())
+        )
+        umap_data = result.scalars().first()
         
-        # Get all news items with embeddings from the specified time period
-        stmt = select(NewsItem).filter(
-            NewsItem.last_seen_at >= time_filter,
-            NewsItem.embedding.is_not(None)
-        ).order_by(NewsItem.last_seen_at.desc())
+        if umap_data:
+            return umap_data.visualization
         
-        result = await db.execute(stmt)
-        news_items = result.scalars().all()
-        
-        if not news_items:
-            return []
-
-        # Extract embeddings and create UMAP input
-        embeddings = [item.embedding for item in news_items]
-        
-        # Perform UMAP dimensionality reduction
-        reducer = umap.UMAP(n_components=2, random_state=42)
-        umap_result = reducer.fit_transform(embeddings)
-        
-        # Combine UMAP coordinates with news items
-        visualization_data = []
-        for i, news_item in enumerate(news_items):
-            visualization_data.append({
-                "id": news_item.id,
-                "title": news_item.title,
-                "url": news_item.url,
-                "source_url": news_item.source_url,
-                "last_seen_at": news_item.last_seen_at.isoformat(),
-                "x": float(umap_result[i][0]),
-                "y": float(umap_result[i][1])
-            })
-        
-        return visualization_data
+        # If no pre-generated data, generate it now
+        return await generate_umap_visualization(db, hours)
         
     except Exception as e:
         logging.error(f"UMAP visualization error: {str(e)}")
@@ -146,7 +126,52 @@ async def search_news(
         
         if not query_embedding:
             raise HTTPException(status_code=422, detail="Failed to generate embedding")
+            
+        # Try to use Redis for search
+        try:
+            # Import Redis client
+            import sys
+            import os
+            sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))))
+            from crawler.app.services.redis_client import RedisClientContextManager
+            
+            async with RedisClientContextManager() as redis_client:
+                # Search using Redis
+                redis_results = await redis_client.search_vectors(query_embedding, limit=limit)
+                
+                if redis_results:
+                    # Get full news items from database
+                    item_ids = [item["id"] for item in redis_results]
+                    stmt = select(NewsItem).filter(NewsItem.id.in_(item_ids))
+                    result = await db.execute(stmt)
+                    db_items = {item.id: item for item in result.scalars().all()}
+                    
+                    # Create NewsItemSimilarity objects
+                    news_items = []
+                    for item in redis_results:
+                        if item["id"] in db_items:
+                            db_item = db_items[item["id"]]
+                            item_data = {
+                                'id': db_item.id,
+                                'title': db_item.title,
+                                'summary': db_item.summary,
+                                'url': db_item.url,
+                                'source_url': db_item.source_url,
+                                'first_seen_at': db_item.first_seen_at,
+                                'last_seen_at': db_item.last_seen_at,
+                                'hit_count': db_item.hit_count,
+                                'created_at': db_item.created_at,
+                                'updated_at': db_item.updated_at,
+                                'similarity': item["similarity"]
+                            }
+                            response_item = NewsItemSimilarity.model_validate(item_data)
+                            news_items.append(response_item)
+                    
+                    return news_items
+        except Exception as e:
+            logging.warning(f"Redis search failed, falling back to database: {str(e)}")
         
+        # If Redis search fails or returns no results, fall back to database search
         # Convert embedding to string representation
         vector_str = f"[{','.join(str(x) for x in query_embedding)}]"
         
@@ -174,7 +199,6 @@ async def search_news(
         
         news_items = []
         for row in result:
-            
             # Create a NewsItem instance
             news_item = NewsItem(
                 id=row.id,
@@ -203,7 +227,7 @@ async def search_news(
         logging.error(f"Search error: {str(e)}")
         raise HTTPException(status_code=422, detail=str(e))
 
-@router.get("/news/clusters", response_model=Dict[int, List[NewsItemSimilarity]])
+@router.get("/news/clusters", response_model=Dict[str, List[Dict]])
 async def get_news_clusters(
     db: AsyncSession = Depends(get_db),
     hours: int = Query(24, ge=1, le=168),  # Default 24 hours, max 1 week
@@ -211,85 +235,46 @@ async def get_news_clusters(
 ):
     """Get clustered news items based on vector similarity."""
     try:
-        # Get news items from the last n hours
-        time_filter = datetime.utcnow() - timedelta(hours=hours)
+        # Try to get pre-generated clusters
+        result = await db.execute(
+            select(NewsClusters).filter(
+                NewsClusters.hours == hours,
+                NewsClusters.min_similarity == min_similarity
+            ).order_by(NewsClusters.created_at.desc())
+        )
+        clusters = result.scalars().first()
         
-        # Get all news items with embeddings from the specified time period
-        stmt = select(NewsItem).filter(
-            NewsItem.last_seen_at >= time_filter,
-            NewsItem.embedding.is_not(None)
-        ).order_by(NewsItem.last_seen_at.desc())
+        if clusters:
+            cluster_data = clusters.clusters
+        else:
+            # If no pre-generated clusters, generate them now
+            cluster_data = await generate_clusters(db, hours, min_similarity)
         
-        result = await db.execute(stmt)
-        news_items = result.scalars().all()
-        
-        # Initialize clusters
-        clusters: Dict[int, List[Tuple[NewsItem, float]]] = {}  # Store (NewsItem, similarity) pairs
-        cluster_vectors: Dict[int, List[float]] = {}
-        next_cluster_id = 0
-        
-        # Helper function to calculate average vector
-        def average_vectors(vectors: List[List[float]]) -> List[float]:
-            if not vectors:
-                return []
-            return [sum(x) / len(vectors) for x in zip(*vectors)]
-        
-        logger.info("Processing news items %s", len(news_items))
-
-        # Process each news item
-        for news_item in news_items:
-            item_vector = news_item.embedding
-            assigned_cluster = None
+        # Convert to dictionary with string keys and serialized items
+        serialized_clusters = {}
+        for cluster_id, items in cluster_data.items():
+            serialized_items = []
+            for item in items:
+                # Create a dictionary with all required fields
+                item_dict = {
+                    'id': item.id,
+                    'title': item.title,
+                    'summary': item.summary,
+                    'url': item.url,
+                    'source_url': item.source_url,
+                    'first_seen_at': item.first_seen_at.isoformat() if hasattr(item.first_seen_at, 'isoformat') else item.first_seen_at,
+                    'last_seen_at': item.last_seen_at.isoformat() if hasattr(item.last_seen_at, 'isoformat') else item.last_seen_at,
+                    'hit_count': item.hit_count,
+                    'created_at': item.created_at.isoformat() if hasattr(item.created_at, 'isoformat') else item.created_at,
+                    'updated_at': item.updated_at.isoformat() if hasattr(item.updated_at, 'isoformat') else item.updated_at,
+                    'similarity': item.similarity
+                }
+                serialized_items.append(item_dict)
             
-            logger.info("Processing news item %s", news_item.title)
-
-            # Check similarity with existing clusters
-            for cluster_id, cluster_vector in cluster_vectors.items():
-                # Calculate cosine similarity using PostgreSQL's function with explicit vector dimension
-                similarity_stmt = text(
-                    "SELECT (1 - cosine_distance(cast(:vec1 as vector(1024)), cast(:vec2 as vector(1024)))) as similarity"
-                )
-                similarity_result = await db.execute(
-                    similarity_stmt,
-                    {
-                        "vec1": f"[{','.join(str(x) for x in item_vector)}]",
-                        "vec2": f"[{','.join(str(x) for x in cluster_vector)}]"
-                    }
-                )
-                similarity = similarity_result.scalar()
-                
-                if similarity >= min_similarity:
-                    assigned_cluster = cluster_id
-                    # Update cluster vector with new average
-                    cluster_items = [item for item, _ in clusters[cluster_id]]
-                    all_vectors = [item.embedding for item in cluster_items] + [item_vector]
-                    cluster_vectors[cluster_id] = average_vectors(all_vectors)
-                    clusters[cluster_id].append((news_item, similarity))
-                    break
+            # Convert numeric cluster_id to string for JSON compatibility
+            serialized_clusters[str(cluster_id)] = serialized_items
             
-            # If no similar cluster found, create new cluster
-            if assigned_cluster is None:
-                clusters[next_cluster_id] = [(news_item, 1.0)]  # Center item has perfect similarity
-                cluster_vectors[next_cluster_id] = item_vector
-                next_cluster_id += 1
-        
-        # Convert to response format
-        response_clusters: Dict[int, List[NewsItemSimilarity]] = {}
-        for cluster_id, items in clusters.items():
-            # Sort items by similarity
-            sorted_items = sorted(items, key=lambda x: x[1], reverse=True)
-            
-            # Convert to NewsItemSimilarity objects
-            response_items = []
-            for item, similarity in sorted_items:
-                item_data = item.__dict__.copy()
-                item_data['similarity'] = similarity
-                response_item = NewsItemSimilarity.model_validate(item_data)
-                response_items.append(response_item)
-            
-            response_clusters[cluster_id] = response_items
-        
-        return response_clusters
+        return serialized_clusters
         
     except Exception as e:
         logging.error(f"Clustering error: {str(e)}")

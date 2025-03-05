@@ -15,11 +15,13 @@ services:
       - SQLITE_PATH=/app/data/urls.db
       - COHERE_API_KEY=${COHERE_API_KEY}
       - CRAWLER_INTERVAL=3600  # 1 hour in seconds
+      - REDIS_URL=redis://redis:6379
     depends_on:
       postgres:
         condition: service_healthy
+      redis:
+        condition: service_healthy
     restart: unless-stopped
-
 
   # Postgres with pgvector extension for vector embeddings
   postgres:
@@ -40,6 +42,25 @@ services:
       retries: 5
     restart: unless-stopped
 
+  # Redis with RedisSearch for vector operations
+  redis:
+    # This image has Redis + RedisSearch + RedisJSON modules
+    # IMPORTANT: Don't use custom command line, it can disable modules
+    image: redis/redis-stack:latest
+    ports:
+      #- "6379:6379"  # Redis port
+      - "8001:8001"  # RedisInsight UI
+    volumes:
+      - redis_data:/data
+    environment:
+      - REDIS_ARGS=--maxmemory 1gb --maxmemory-policy allkeys-lru --io-threads 4 --protected-mode no
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+
   # Crawler service (separated for scalability)
   crawler:
     build:
@@ -52,11 +73,33 @@ services:
       - SQLITE_PATH=/app/data/urls.db
       - COHERE_API_KEY=${COHERE_API_KEY}
       - CRAWLER_INTERVAL=3600  # 1 hour in seconds
+      - REDIS_URL=redis://redis:6379
     depends_on:
       postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # Embeddings service (separate service for vector operations)
+  embeddings:
+    build:
+      context: ./crawler  # Reuse crawler image for now
+      dockerfile: Dockerfile
+    command: python -m app.services.embedding_worker
+    environment:
+      - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/newsdb
+      - COHERE_API_KEY=${COHERE_API_KEY}
+      - REDIS_URL=redis://redis:6379
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
         condition: service_healthy
     restart: unless-stopped
 
 volumes:
   postgres_data:
   sqlite_data:
+  redis_data:
+    driver: local
