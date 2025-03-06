@@ -42,3 +42,4 @@ ENV/
 *.sqlite
 *.sqlite3
 *.local
+.aider*
