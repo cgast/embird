@@ -5,7 +5,7 @@
 {% block content %}
 <div class="row mb-4">
     <div class="col">
-        <h2>News</h2>
+        <h1>News</h1>
         {% if current_source %}
         <p>Showing news from: <strong>{{ current_source }}</strong></p>
         {% else %}
@@ -14,64 +14,46 @@
     </div>
 </div>
 
-
-<div class="card">
-    <div class="card-body">
+<div class="row">
+    <div class="col">
         {% if news_items %}
-        <div class="table-responsive">
-            <table class="table table-hover">
-                <thead>
-                    <tr>
-                        <th>Title</th>
-                        <th>Source</th>
-                        <th>First Seen</th>
-                        <th>Last Seen</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for item in news_items %}
-                    <tr>
-                        <td><a href="/news/{{ item.id }}">{{ item.title }}</a></td>
-                        <td>{{ item.source_url }}</td>
-                        <td>{{ item.first_seen_at.strftime('%Y-%m-%d %H:%M') }}</td>
-                        <td>{{ item.last_seen_at.strftime('%Y-%m-%d %H:%M') }}</td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-        </div>
-        
+            {% for item in news_items %}
+            <div class="row">
+                <div style="font-size: 1.4em;"><a href="/news/{{ item.id }}">{{ item.title }}</a></div>
+                <div style="font-size: 0.7em;">{{ item.first_seen_at.strftime('%Y-%m-%d %H:%M') }} - {{ item.source_url }}</div>
+                <div>&nbsp;</div>
+            </div>
+            {% endfor %}
         <!-- Pagination -->
         {% if total_pages > 1 %}
-        <nav aria-label="Page navigation">
-            <ul class="pagination justify-content-center">
-                <li class="page-item {% if page == 1 %}disabled{% endif %}">
-                    <a class="page-link" href="/news?page={{ page - 1 }}{% if current_source %}&source_url={{ current_source }}{% endif %}">Previous</a>
-                </li>
-                
-                {% for i in range(1, total_pages + 1) %}
-                <li class="page-item {% if i == page %}active{% endif %}">
-                    <a class="page-link" href="/news?page={{ i }}{% if current_source %}&source_url={{ current_source }}{% endif %}">{{ i }}</a>
-                </li>
-                {% endfor %}
-                
-                <li class="page-item {% if page == total_pages %}disabled{% endif %}">
-                    <a class="page-link" href="/news?page={{ page + 1 }}{% if current_source %}&source_url={{ current_source }}{% endif %}">Next</a>
-                </li>
-            </ul>
-        </nav>
-        {% endif %}
-        
-        {% else %}
-        <div class="alert alert-info">
-            <p class="mb-0">
-                {% if current_source %}
-                No news found from this source yet.
-                {% else %}
-                No news items available yet. Add some URLs to crawl.
-                {% endif %}
-            </p>
+        <div class="mt-4">
+            <nav aria-label="Page navigation">
+                <ul class="pagination justify-content-center">
+                    <li class="page-item {% if page == 1 %}disabled{% endif %}">
+                        <a class="page-link" href="/news?page={{ page - 1 }}{% if current_source %}&source_url={{ current_source }}{% endif %}">Previous</a>
+                    </li>
+                    
+                    {% for i in range(1, total_pages + 1) %}
+                    <li class="page-item {% if i == page %}active{% endif %}">
+                        <a class="page-link" href="/news?page={{ i }}{% if current_source %}&source_url={{ current_source }}{% endif %}">{{ i }}</a>
+                    </li>
+                    {% endfor %}
+                    
+                    <li class="page-item {% if page == total_pages %}disabled{% endif %}">
+                        <a class="page-link" href="/news?page={{ page + 1 }}{% if current_source %}&source_url={{ current_source }}{% endif %}">Next</a>
+                    </li>
+                </ul>
+            </nav>
         </div>
+        {% endif %}
+        {% else %}
+        <p class="text-muted">
+            {% if current_source %}
+            No news found from this source yet.
+            {% else %}
+            No news items available yet. Add some URLs to crawl.
+            {% endif %}
+        </p>
         {% endif %}
     </div>
 </div>

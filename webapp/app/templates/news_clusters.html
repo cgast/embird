@@ -17,8 +17,12 @@
     </div>
 </div>
 
-<div id="clustersContainer">
-    <!-- Clusters will be loaded here -->
+<div class="row">
+    <div class="col">
+        <div id="clustersContainer">
+            <!-- Clusters will be loaded here -->
+        </div>
+    </div>
 </div>
 
 <div class="row mb-3">
@@ -40,44 +44,36 @@
 </div>
 
 <template id="clusterTemplate">
-    <div class="card mb-4">
-        <div class="card-header d-flex justify-content-between align-items-center">
+    <div class="mb-4">
+        <div class="d-flex justify-content-between align-items-center mb-2">
             <h5 class="mb-0"> </h5>
             <span class="badge bg-primary"><span class="article-count"></span> articles</span>
         </div>
-        <div class="card-body">
-            <details class="cluster-details">
-                <summary class="center-article">
-                    <!-- Center article will be inserted here -->
-                </summary>
-                <div class="list-group list-group-flush related-news mt-3">
-                    <!-- Related articles will be inserted here -->
-                </div>
-            </details>
-        </div>
+        <details class="cluster-details">
+            <summary class="center-article">
+                <!-- Center article will be inserted here -->
+            </summary>
+            <div class="list-group list-group-flush related-news mt-3">
+                <!-- Related articles will be inserted here -->
+            </div>
+        </details>
     </div>
 </template>
 
 <template id="centerArticleTemplate">
-    <div class="d-flex w-100 justify-content-between">
-        <h6 class="mb-1 news-title"></h6>
-        <small class="text-muted news-date"></small>
-    </div>
+    <div style="font-size: 1.4em;" class="news-title"></div>
+    <div style="font-size: 0.7em;"><span class="news-date"></span> - <span class="news-source"></span></div>
     <p class="mb-1 news-summary"></p>
-    <small class="text-muted news-source"></small>
 </template>
 
 <template id="newsItemTemplate">
     <a href="#" class="list-group-item list-group-item-action">
-        <div class="d-flex w-100 justify-content-between">
-            <h6 class="mb-1 news-title"></h6>
-            <div class="d-flex align-items-center">
-                <span class="badge bg-info me-2 similarity-badge"></span>
-                <small class="text-muted news-date"></small>
-            </div>
+        <div style="font-size: 1.2em;" class="news-title"></div>
+        <div style="font-size: 0.7em;">
+            <span class="badge bg-info me-2 similarity-badge"></span>
+            <span class="news-date"></span> - <span class="news-source"></span>
         </div>
         <p class="mb-1 news-summary"></p>
-        <small class="text-muted news-source"></small>
     </a>
 </template>
 {% endblock %}
