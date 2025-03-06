@@ -45,9 +45,9 @@ services:
   # Redis with RedisSearch for vector operations
   redis:
     image: redis/redis-stack:7.2.0-v6
-    ports:
+    #ports:
       #- "6379:6379"  # Redis port
-      - "8001:8001"  # RedisInsight UI
+      #- "8001:8001"  # RedisInsight UI
     volumes:
       - redis_data:/data
     healthcheck:
