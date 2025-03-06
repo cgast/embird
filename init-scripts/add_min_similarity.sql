@@ -8,4 +8,4 @@ BEGIN
     ) THEN
         ALTER TABLE news_umap ADD COLUMN min_similarity FLOAT NOT NULL DEFAULT 0.6;
     END IF;
-END $$;
+END $BLOCK$;
