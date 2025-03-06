@@ -1,3 +1,4 @@
+"""API routes for the application."""
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, text
@@ -30,9 +31,13 @@ router = APIRouter(tags=["api"])
 async def get_news_umap(
     db: AsyncSession = Depends(get_db),
     hours: int = Query(24, ge=1, le=168),  # Default 24 hours, max 1 week
+    min_similarity: float = Query(0.6, ge=0.0, le=100.0)  # Accept both decimal and percentage values
 ):
     """Get UMAP visualization data for news items."""
     try:
+        # Convert percentage to decimal if needed
+        normalized_similarity = min_similarity / 100.0 if min_similarity > 1.0 else min_similarity
+        
         # Try to get pre-generated visualization
         result = await db.execute(
             select(NewsUMAP).filter(NewsUMAP.hours == hours).order_by(NewsUMAP.created_at.desc())
@@ -43,7 +48,7 @@ async def get_news_umap(
             return umap_data.visualization
         
         # If no pre-generated data, generate it now
-        return await generate_umap_visualization(db, hours)
+        return await generate_umap_visualization(db, hours, normalized_similarity)
         
     except Exception as e:
         logging.error(f"UMAP visualization error: {str(e)}")
@@ -231,15 +236,18 @@ async def search_news(
 async def get_news_clusters(
     db: AsyncSession = Depends(get_db),
     hours: int = Query(24, ge=1, le=168),  # Default 24 hours, max 1 week
-    min_similarity: float = Query(0.2, ge=0.0, le=1.0)  # Default 20% similarity
+    min_similarity: float = Query(0.6, ge=0.0, le=100.0)  # Accept both decimal and percentage values
 ):
     """Get clustered news items based on vector similarity."""
     try:
+        # Convert percentage to decimal if needed
+        normalized_similarity = min_similarity / 100.0 if min_similarity > 1.0 else min_similarity
+        
         # Try to get pre-generated clusters
         result = await db.execute(
             select(NewsClusters).filter(
                 NewsClusters.hours == hours,
-                NewsClusters.min_similarity == min_similarity
+                NewsClusters.min_similarity == normalized_similarity
             ).order_by(NewsClusters.created_at.desc())
         )
         clusters = result.scalars().first()
@@ -248,7 +256,7 @@ async def get_news_clusters(
             cluster_data = clusters.clusters
         else:
             # If no pre-generated clusters, generate them now
-            cluster_data = await generate_clusters(db, hours, min_similarity)
+            cluster_data = await generate_clusters(db, hours, normalized_similarity)
         
         # Convert to dictionary with string keys and serialized items
         serialized_clusters = {}
