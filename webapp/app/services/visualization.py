@@ -73,11 +73,20 @@ async def generate_clusters(
 
 async def generate_umap_visualization(
     db: AsyncSession,
-    hours: int = 24,
+    hours: int = 48,
     min_similarity: float = 0.6
 ) -> List[dict]:
     """Generate UMAP visualization data for news items."""
     try:
+        # First generate clusters to get cluster assignments
+        clusters = await generate_clusters(db, hours, min_similarity)
+        
+        # Create a mapping of news item ID to cluster ID
+        item_to_cluster = {}
+        for cluster_id, items in clusters.items():
+            for item in items:
+                item_to_cluster[item['id']] = int(cluster_id)
+
         # Get news items from the last n hours
         time_filter = datetime.utcnow() - timedelta(hours=hours)
         
@@ -100,25 +109,24 @@ async def generate_umap_visualization(
         reducer = umap.UMAP(n_components=2, random_state=42, n_neighbors=15)
         umap_result = reducer.fit_transform(embeddings)
         
-        # Get clusters to assign cluster IDs to the visualization
-        clusters_data = await generate_clusters(db, hours, min_similarity)
-        
-        # Create a mapping of news item IDs to cluster IDs
-        item_to_cluster = {}
-        for cluster_id, items in clusters_data.items():
-            for item in items:
-                item_to_cluster[item['id']] = int(cluster_id)
-        
-        # Calculate the age of each item for opacity
+        # Calculate time-based opacity
         now = datetime.utcnow()
-        max_age = timedelta(hours=hours)
+        one_hour_ago = now - timedelta(hours=1)
+        yesterday = now - timedelta(days=1)
         
         # Combine UMAP coordinates with news items
         visualization_data = []
         for i, news_item in enumerate(news_items):
-            # Calculate age-based opacity (newer = more opaque)
-            age = now - news_item.last_seen_at
-            opacity = max(0.3, 1.0 - (age / max_age))
+            # Calculate opacity based on age
+            last_seen = news_item.last_seen_at
+            if last_seen >= one_hour_ago:
+                opacity = 0.8
+            elif last_seen <= yesterday:
+                opacity = 0.2
+            else:
+                # Linear interpolation between 0.8 and 0.2 for items between 1 hour and 1 day old
+                hours_old = (now - last_seen).total_seconds() / 3600
+                opacity = 0.8 - (0.6 * (hours_old - 1) / 23)  # 23 = 24 - 1
             
             visualization_data.append({
                 "id": news_item.id,
