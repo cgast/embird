@@ -1,5 +1,5 @@
 -- Add min_similarity column to news_umap table if it doesn't exist
-DO $BLOCK$
+DO $$
 BEGIN
     IF NOT EXISTS (
         SELECT 1 
@@ -8,4 +8,4 @@ BEGIN
     ) THEN
         ALTER TABLE news_umap ADD COLUMN min_similarity FLOAT NOT NULL DEFAULT 0.6;
     END IF;
-END $BLOCK$;
+END $$;
