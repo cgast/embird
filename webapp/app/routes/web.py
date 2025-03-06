@@ -1,6 +1,6 @@
 """Web routes for the application."""
 from fastapi import APIRouter, Request, Form, Depends, HTTPException, Query
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, text
 from typing import List, Optional, Dict
@@ -8,7 +8,7 @@ import time
 from datetime import datetime
 
 from app.models.url import URL, URLCreate, URLDatabase
-from app.models.news import NewsItem, NewsClusters, NewsUMAP
+from shared.models.news import NewsItem, NewsClusters, NewsUMAP  # Updated import
 from app.services.db import get_db, url_db
 from app.services.visualization import generate_clusters, generate_umap_visualization
 
@@ -18,8 +18,6 @@ import logging
 logger = logging.getLogger(__name__)    
 router = APIRouter()
 
-# [Previous routes unchanged...]
-# Keeping all the routes up to /search unchanged for brevity
 @router.get("/", response_class=HTMLResponse)
 async def index(request: Request, db: AsyncSession = Depends(get_db)):
     """Render the home page."""
@@ -307,12 +305,12 @@ async def view_clusters(
             }
         )
 
-@router.get("/umap", response_class=HTMLResponse)
+@router.get("/umap")
 async def view_umap(
     request: Request,
     db: AsyncSession = Depends(get_db),
     hours: int = Query(48, ge=1, le=168),
-    min_similarity: float = Query(0.6, ge=0.0, le=1.0)  # Restored to 0.6
+    min_similarity: float = Query(0.6, ge=0.0, le=1.0)
 ):
     """Render the UMAP visualization page."""
     try:
@@ -337,6 +335,16 @@ async def view_umap(
         
         logger.info(f"UMAP visualization generated in {time.time() - start_time:.2f} seconds")
         
+        # Check if request wants JSON
+        accept = request.headers.get("accept", "")
+        if "application/json" in accept:
+            return JSONResponse({
+                "visualization": visualization_data,
+                "hours": hours,
+                "min_similarity": min_similarity * 100
+            })
+        
+        # Otherwise return HTML
         return request.state.templates.TemplateResponse(
             "news_umap.html",
             {
@@ -348,10 +356,17 @@ async def view_umap(
         )
     except Exception as e:
         logger.error(f"Error loading UMAP visualization: {str(e)}", exc_info=True)
+        error_msg = "Failed to load visualization. Please try again later."
+        
+        # Return error in requested format
+        accept = request.headers.get("accept", "")
+        if "application/json" in accept:
+            return JSONResponse({"error": error_msg}, status_code=500)
+            
         return request.state.templates.TemplateResponse(
             "news_umap.html",
             {
                 "request": request,
-                "error": "Failed to load visualization. Please try again later."
+                "error": error_msg
             }
         )

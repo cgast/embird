@@ -6,7 +6,7 @@ import umap
 from sqlalchemy import select, text, update, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.news import NewsItem, NewsClusters, NewsUMAP
+from shared.models.news import NewsItem, NewsClusters, NewsUMAP  # Updated import
 from app.services.redis_client import get_redis_client
 
 logger = logging.getLogger(__name__)
@@ -86,7 +86,8 @@ async def generate_umap_visualization(
                 item_to_cluster[item['id']] = cluster_id
 
         # Get news items from the last n hours
-        time_filter = datetime.utcnow() - timedelta(hours=hours)
+        time_filter = datetime.utcnow().replace(tzinfo=None)  # Ensure naive datetime for comparison
+        time_filter = time_filter - timedelta(hours=hours)
         
         # Get all news items with embeddings from the specified time period
         stmt = select(NewsItem).filter(
@@ -108,22 +109,26 @@ async def generate_umap_visualization(
         umap_result = reducer.fit_transform(embeddings)
         
         # Calculate time-based opacity
-        now = datetime.utcnow()
+        now = datetime.utcnow().replace(tzinfo=None)  # Ensure naive datetime
         one_hour_ago = now - timedelta(hours=1)
         yesterday = now - timedelta(days=1)
         
         # Combine UMAP coordinates with news items
         visualization_data = []
         for i, news_item in enumerate(news_items):
-            # Calculate opacity based on age
+            # Convert last_seen_at to naive datetime for comparison if it has timezone info
             last_seen = news_item.last_seen_at
-            if last_seen >= one_hour_ago:
+            if last_seen and last_seen.tzinfo:
+                last_seen = last_seen.replace(tzinfo=None)
+            
+            # Calculate opacity based on age
+            if last_seen and last_seen >= one_hour_ago:
                 opacity = 0.8
-            elif last_seen <= yesterday:
+            elif last_seen and last_seen <= yesterday:
                 opacity = 0.2
             else:
                 # Linear interpolation between 0.8 and 0.2 for items between 1 hour and 1 day old
-                hours_old = (now - last_seen).total_seconds() / 3600
+                hours_old = (now - last_seen).total_seconds() / 3600 if last_seen else 24
                 opacity = 0.8 - (0.6 * (hours_old - 1) / 23)  # 23 = 24 - 1
             
             visualization_data.append({

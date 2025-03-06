@@ -6,7 +6,7 @@ from sqlalchemy.orm import sessionmaker
 from contextlib import asynccontextmanager
 
 from app.config import settings
-from app.models.news import Base as NewsBase
+from shared.models.news import Base as NewsBase  # Updated import
 from app.models.url import URLDatabase
 
 # PostgreSQL async engine

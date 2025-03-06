@@ -18,7 +18,7 @@ class NewsItem(Base):
     url = Column(String, nullable=False, unique=True)
     source_url = Column(String, nullable=False, index=True)
     first_seen_at = Column(DateTime(timezone=True), nullable=False)
-    last_seen_at = Column(DateTime(timezone=True), nullable=False, index=True)  # Added index
+    last_seen_at = Column(DateTime(timezone=True), nullable=False, index=True)
     hit_count = Column(Integer, nullable=False, default=1)
     embedding = Column(Vector(1024), nullable=True)  # Using 1024 dimensions for Cohere embed-english-v3.0
     created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
@@ -61,7 +61,7 @@ class NewsUMAP(Base):
     
     id = Column(Integer, primary_key=True, index=True)
     hours = Column(Integer, nullable=False)
-    min_similarity = Column(FLOAT, nullable=False)
+    min_similarity = Column(FLOAT, nullable=False)  # Added min_similarity field
     visualization = Column(JSON, nullable=False)  # Store visualization data as JSON
     created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
     
@@ -72,7 +72,7 @@ class NewsUMAP(Base):
     )
     
     def __repr__(self):
-        return f"<NewsUMAP(hours={self.hours})>"
+        return f"<NewsUMAP(hours={self.hours}, min_similarity={self.min_similarity})>"
 
 
 # Pydantic models for API
@@ -125,6 +125,7 @@ class NewsClustersResponse(BaseModel):
 class NewsUMAPResponse(BaseModel):
     """Model for returning pre-generated UMAP visualization."""
     hours: int
+    min_similarity: float
     visualization: List[dict]
     created_at: datetime
     

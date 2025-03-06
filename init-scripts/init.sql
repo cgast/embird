@@ -20,7 +20,6 @@ ALTER SYSTEM SET autovacuum_work_mem = '1048576kB';  -- Currently -1 (uses maint
 ALTER SYSTEM SET autovacuum_vacuum_cost_delay = '20ms';  -- Make it less aggressive
 SELECT pg_reload_conf();
 
-
 -- Create the vector extension if it doesn't exist
 CREATE EXTENSION IF NOT EXISTS vector;
 
@@ -90,10 +89,46 @@ CREATE INDEX IF NOT EXISTS news_clusters_lookup_idx ON news_clusters(hours, min_
 -- Create table for pre-generated UMAP visualizations
 CREATE TABLE IF NOT EXISTS news_umap (
     id SERIAL PRIMARY KEY,
-    hours INTEGER NOT NULL UNIQUE,
+    hours INTEGER NOT NULL,
     visualization JSONB NOT NULL,
     created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
 );
 
 -- Create index on hours for quick lookups
 CREATE INDEX IF NOT EXISTS news_umap_hours_idx ON news_umap(hours);
+
+-- Add min_similarity column to news_umap table if it doesn't exist
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 
+        FROM information_schema.columns 
+        WHERE table_name='news_umap' AND column_name='min_similarity'
+    ) THEN
+        ALTER TABLE news_umap ADD COLUMN min_similarity FLOAT NOT NULL DEFAULT 0.6;
+    END IF;
+END $$;
+
+-- Add composite index for faster lookups if it doesn't exist
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1
+        FROM pg_indexes
+        WHERE indexname = 'idx_umap_hours_similarity'
+    ) THEN
+        CREATE INDEX idx_umap_hours_similarity ON news_umap (hours, min_similarity);
+    END IF;
+END $$;
+
+-- Add unique constraint if it doesn't exist
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1
+        FROM pg_constraint
+        WHERE conname = 'uix_umap_hours_similarity'
+    ) THEN
+        ALTER TABLE news_umap ADD CONSTRAINT uix_umap_hours_similarity UNIQUE (hours, min_similarity);
+    END IF;
+END $$;

@@ -82,8 +82,29 @@ document.addEventListener('DOMContentLoaded', function() {
                 </div>
             `;
             
-            // Use window.location to navigate to the page with new parameters
-            window.location.href = `/umap?hours=${hours}&min_similarity=${minSimilarity}`;
+            // Fetch data using AJAX instead of page reload
+            const response = await fetch(`/umap?hours=${hours}&min_similarity=${minSimilarity}`, {
+                headers: {
+                    'Accept': 'application/json'
+                }
+            });
+            
+            if (!response.ok) {
+                throw new Error('Failed to fetch visualization data');
+            }
+            
+            const data = await response.json();
+            if (data.error) {
+                throw new Error(data.error);
+            }
+            
+            // Update URL without reloading
+            const url = new URL(window.location);
+            url.searchParams.set('hours', hours);
+            url.searchParams.set('min_similarity', minSimilarity);
+            window.history.pushState({}, '', url);
+            
+            createVisualization(data.visualization);
         } catch (error) {
             console.error('Error loading visualization:', error);
             document.getElementById('visualization').innerHTML = `

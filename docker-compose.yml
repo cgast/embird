@@ -4,8 +4,8 @@ services:
   # Web frontend and API service
   webapp:
     build:
-      context: ./webapp
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: webapp/Dockerfile
     ports:
       - "8000:8000"
     volumes:
@@ -44,18 +44,14 @@ services:
 
   # Redis with RedisSearch for vector operations
   redis:
-    # This image has Redis + RedisSearch + RedisJSON modules
-    # IMPORTANT: Don't use custom command line, it can disable modules
-    image: redis/redis-stack:latest
+    image: redis/redis-stack:7.2.0-v6
     ports:
       #- "6379:6379"  # Redis port
       - "8001:8001"  # RedisInsight UI
     volumes:
       - redis_data:/data
-    environment:
-      - REDIS_ARGS=--maxmemory 1gb --maxmemory-policy allkeys-lru --io-threads 4 --protected-mode no
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ["CMD", "redis-cli", "MODULE", "LIST"]  # Verify modules are loaded
       interval: 10s
       timeout: 10s
       retries: 3
@@ -64,8 +60,8 @@ services:
   # Crawler service (separated for scalability)
   crawler:
     build:
-      context: ./crawler
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: crawler/Dockerfile
     volumes:
       - sqlite_data:/app/data
     environment:
@@ -84,8 +80,8 @@ services:
   # Embeddings service (separate service for vector operations)
   embeddings:
     build:
-      context: ./crawler  # Reuse crawler image for now
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: crawler/Dockerfile
     command: python -m app.services.embedding_worker
     environment:
       - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/newsdb

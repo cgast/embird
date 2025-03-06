@@ -13,7 +13,7 @@ import numpy as np
 import umap
 
 from app.models.url import URL, URLCreate, URLDatabase
-from app.models.news import (
+from shared.models.news import (  # Updated import
     NewsItem, NewsItemResponse, NewsItemSimilarity,
     NewsClusters, NewsUMAP,
     NewsClustersResponse, NewsUMAPResponse
@@ -257,6 +257,15 @@ async def get_news_clusters(
         else:
             # If no pre-generated clusters, generate them now
             cluster_data = await generate_clusters(db, hours, normalized_similarity)
+            
+            # Store the newly generated clusters in the database
+            new_clusters = NewsClusters(
+                hours=hours,
+                min_similarity=normalized_similarity,
+                clusters=cluster_data
+            )
+            db.add(new_clusters)
+            await db.commit()
         
         # Convert to dictionary with string keys and serialized items
         serialized_clusters = {}

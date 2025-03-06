@@ -7,7 +7,7 @@ from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 import numpy as np
 
-from app.models.news import NewsItem, NewsItemSimilarity
+from shared.models.news import NewsItem, NewsItemSimilarity  # Updated import
 from app.config import settings
 from app.services.redis_client import get_redis_client
 

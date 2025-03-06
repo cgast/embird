@@ -8,7 +8,7 @@ from app.services.crawler import Crawler
 from app.models.url import URLDatabase
 from app.services.visualization import generate_clusters
 from app.services.db import get_db
-from app.models.news import NewsClusters
+from shared.models.news import NewsClusters  # Updated import
 from sqlalchemy import select, update, func
 
 # Configure logging

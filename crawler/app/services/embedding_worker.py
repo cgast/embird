@@ -13,7 +13,7 @@ import numpy as np
 from pgvector.sqlalchemy import Vector
 
 from app.config import settings
-from app.models.news import NewsItem, NewsClusters, NewsUMAP
+from shared.models.news import NewsItem, NewsClusters, NewsUMAP  # Updated import
 from app.services.embedding import EmbeddingService
 from app.services.redis_client import get_redis_client
 from app.services.visualization import generate_umap_visualization
@@ -129,32 +129,38 @@ class EmbeddingWorker:
                 
                 # Update clusters
                 for hours in time_ranges:
-                    # Generate UMAP visualization
-                    umap_data = await generate_umap_visualization(session, hours)
-                    
-                    # Check if UMAP visualization exists
-                    stmt = select(NewsUMAP).filter(NewsUMAP.hours == hours)
-                    result = await session.execute(stmt)
-                    existing_umap = result.scalar_one_or_none()
-                    
-                    if existing_umap:
-                        # Update existing visualization
-                        stmt = update(NewsUMAP).where(NewsUMAP.hours == hours).values(
-                            visualization=umap_data,
-                            created_at=func.now()
-                        )
-                        await session.execute(stmt)
-                    else:
-                        # Create new visualization
-                        umap_viz = NewsUMAP(
-                            hours=hours,
-                            visualization=umap_data
-                        )
-                        session.add(umap_viz)
-                    
-                    # Generate and store clusters for different similarities
                     for min_similarity in similarities:
-                        # Generate clusters using Redis
+                        # Generate UMAP visualization
+                        umap_data = await generate_umap_visualization(session, hours, min_similarity)
+                        
+                        # Check if UMAP visualization exists
+                        stmt = select(NewsUMAP).filter(
+                            NewsUMAP.hours == hours,
+                            NewsUMAP.min_similarity == min_similarity
+                        )
+                        result = await session.execute(stmt)
+                        existing_umap = result.scalar_one_or_none()
+                        
+                        if existing_umap:
+                            # Update existing visualization
+                            stmt = update(NewsUMAP).where(
+                                NewsUMAP.hours == hours,
+                                NewsUMAP.min_similarity == min_similarity
+                            ).values(
+                                visualization=umap_data,
+                                created_at=func.now()
+                            )
+                            await session.execute(stmt)
+                        else:
+                            # Create new visualization
+                            umap_viz = NewsUMAP(
+                                hours=hours,
+                                min_similarity=min_similarity,
+                                visualization=umap_data
+                            )
+                            session.add(umap_viz)
+                        
+                        # Generate and store clusters
                         clusters_data = await redis_client.get_clusters(hours, min_similarity)
                         
                         if not clusters_data:

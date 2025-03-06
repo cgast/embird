@@ -1,6 +1,7 @@
 import json
-from typing import Dict, List, Optional, Any, Union
+from typing import Dict, List, Optional, Any, Union, Set
 import asyncio
+from datetime import datetime, timedelta
 import redis.asyncio as redis
 import numpy as np
 
@@ -40,6 +41,14 @@ class RedisClient:
                 
                 await self._redis.ping()
                 print("REDIS DEBUG: Connection established successfully")
+                
+                # Check Redis modules
+                try:
+                    modules = await self._redis.execute_command('MODULE LIST')
+                    print("REDIS DEBUG: Loaded modules:", modules)
+                except Exception as e:
+                    print(f"REDIS DEBUG: Error checking modules: {e}")
+                
                 break
             except (redis.ConnectionError, redis.TimeoutError) as e:
                 retry_count += 1
@@ -57,38 +66,76 @@ class RedisClient:
                 print(f"REDIS DEBUG: Error listing indices: {e}")
                 indices = []
             
-            # Try to drop existing index if it exists
-            if f"{settings.REDIS_PREFIX}idx".encode() in indices or any(idx.decode() == f"{settings.REDIS_PREFIX}idx" for idx in indices if hasattr(idx, 'decode')):
+            # Only create index if it doesn't exist
+            if f"{settings.REDIS_PREFIX}idx".encode() not in indices and not any(idx.decode() == f"{settings.REDIS_PREFIX}idx" for idx in indices if hasattr(idx, 'decode')):
                 try:
-                    await self._redis.execute_command("FT.DROPINDEX", f"{settings.REDIS_PREFIX}idx")
-                    print(f"REDIS DEBUG: Dropped existing index {settings.REDIS_PREFIX}idx")
+                    # Create vector index with HNSW algorithm and timestamp field
+                    schema_args = [
+                        "ON", "HASH",
+                        "PREFIX", "1", settings.REDIS_PREFIX,
+                        "SCHEMA",
+                        "embedding", "VECTOR", "HNSW", "6", "TYPE", "FLOAT32", 
+                        "DIM", str(settings.VECTOR_DIMENSIONS), 
+                        "DISTANCE_METRIC", "COSINE",
+                        "title", "TEXT", "SORTABLE",
+                        "url", "TEXT", "SORTABLE",
+                        "source_url", "TEXT", "SORTABLE",
+                        "timestamp", "NUMERIC", "SORTABLE"
+                    ]
+                    
+                    command = ["FT.CREATE", f"{settings.REDIS_PREFIX}idx"] + schema_args
+                    print(f"REDIS DEBUG: Creating index with command: {' '.join(str(x) for x in command)}")
+                    
+                    result = await self._redis.execute_command(*command)
+                    print(f"REDIS DEBUG: Index creation result: {result}")
+                    
+                    # Verify index was created
+                    indices_after = await self._redis.execute_command("FT._LIST")
+                    print(f"REDIS DEBUG: Indices after creation: {indices_after}")
+                    
+                    # Get index info
+                    try:
+                        info = await self._redis.execute_command("FT.INFO", f"{settings.REDIS_PREFIX}idx")
+                        print(f"REDIS DEBUG: Index info: {info}")
+                    except Exception as e:
+                        print(f"REDIS DEBUG: Error getting index info: {e}")
+                    
                 except Exception as e:
-                    print(f"REDIS DEBUG: Error dropping index: {e}")
+                    print(f"REDIS DEBUG: Error creating index: {e}")
+                    # Try alternative syntax for older Redis versions
+                    try:
+                        print("REDIS DEBUG: Trying alternative index creation syntax")
+                        schema_args = [
+                            "ON", "HASH",
+                            "PREFIX", "1", settings.REDIS_PREFIX,
+                            "SCHEMA",
+                            "embedding", "VECTOR", "16", "FLOAT32", 
+                            "DIM", str(settings.VECTOR_DIMENSIONS), 
+                            "DISTANCE_METRIC", "COSINE",
+                            "TYPE", "HNSW",
+                            "title", "TEXT", "SORTABLE",
+                            "url", "TEXT", "SORTABLE",
+                            "source_url", "TEXT", "SORTABLE",
+                            "timestamp", "NUMERIC", "SORTABLE"
+                        ]
+                        
+                        command = ["FT.CREATE", f"{settings.REDIS_PREFIX}idx"] + schema_args
+                        print(f"REDIS DEBUG: Creating index with alternative command: {' '.join(str(x) for x in command)}")
+                        
+                        result = await self._redis.execute_command(*command)
+                        print(f"REDIS DEBUG: Alternative index creation result: {result}")
+                    except Exception as alt_e:
+                        print(f"REDIS DEBUG: Alternative index creation also failed: {alt_e}")
+            else:
+                print(f"REDIS DEBUG: Index {settings.REDIS_PREFIX}idx already exists")
+                # Get index info
+                try:
+                    info = await self._redis.execute_command("FT.INFO", f"{settings.REDIS_PREFIX}idx")
+                    print(f"REDIS DEBUG: Existing index info: {info}")
+                except Exception as e:
+                    print(f"REDIS DEBUG: Error getting existing index info: {e}")
             
-            # Create vector index with FLAT algorithm
-            try:
-                schema_args = [
-                    "ON", "HASH",
-                    "PREFIX", "1", settings.REDIS_PREFIX,
-                    "SCHEMA",
-                    "embedding", "VECTOR", "FLAT", "TYPE", "FLOAT32", 
-                    "DIM", str(settings.VECTOR_DIMENSIONS), 
-                    "DISTANCE_METRIC", "COSINE",
-                    "title", "TEXT", "SORTABLE",
-                    "url", "TEXT", "SORTABLE",
-                    "source_url", "TEXT", "SORTABLE"
-                ]
-                
-                command = ["FT.CREATE", f"{settings.REDIS_PREFIX}idx"] + schema_args
-                print(f"REDIS DEBUG: Executing command: {command}")
-                
-                result = await self._redis.execute_command(*command)
-                print(f"REDIS DEBUG: Index creation result: {result}")
-                self._initialized = True
-                
-            except Exception as e:
-                print(f"REDIS DEBUG: Error creating index: {e}")
-                self._initialized = True
+            self._initialized = True
                 
         except Exception as e:
             print(f"REDIS DEBUG: Error initializing Redis: {e}")
@@ -142,12 +189,13 @@ class RedisClient:
             # Convert to binary
             embedding_bytes = embedding_np.tobytes()
             
-            # Store in Redis
+            # Store in Redis with timestamp
             data = {
                 "title": metadata.get("title", ""),
                 "url": metadata.get("url", ""),
                 "source_url": metadata.get("source_url", ""),
-                "embedding": embedding_bytes
+                "embedding": embedding_bytes,
+                "timestamp": str(int(datetime.now().timestamp()))
             }
             
             await self._redis.hset(key, mapping=data)
@@ -158,7 +206,7 @@ class RedisClient:
             print(f"REDIS DEBUG: Error storing in Redis: {e}")
             return False
     
-    async def search_vectors(self, query_vector: Union[List[float], np.ndarray], limit: int = 10, filter_str: Optional[str] = None) -> List[Dict[str, Any]]:
+    async def search_vectors(self, query_vector: Union[List[float], np.ndarray], limit: int = 10, min_timestamp: Optional[int] = None, exclude_ids: Optional[Set[int]] = None) -> List[Dict[str, Any]]:
         """Search for similar vectors in Redis."""
         if not self._initialized:
             await self.initialize()
@@ -173,64 +221,71 @@ class RedisClient:
             # Convert to binary
             query_bytes = query_np.tobytes()
             
-            # Search using Redis command
-            command = [
-                "FT.SEARCH", f"{settings.REDIS_PREFIX}idx",
-                "*",
-                "RETURN", "4", "title", "url", "source_url", "embedding",
-                "LIMIT", "0", str(limit)
-            ]
-            
-            result = await self._redis.execute_command(*command)
-            
-            processed_results = []
-            
-            if result and len(result) > 1:
-                for i in range(1, len(result), 2):
-                    try:
-                        doc_id = int(result[i].decode().replace(f"{settings.REDIS_PREFIX}", ""))
-                        values = result[i+1]
-                        
-                        # Extract fields
-                        attrs = {}
-                        vector = None
-                        
-                        for j in range(0, len(values), 2):
-                            field = values[j].decode()
-                            value = values[j+1]
+            # Build KNN search query
+            try:
+                print("REDIS DEBUG: Attempting KNN search")
+                query = f"*=>[KNN {limit} @embedding $vec AS score]"
+                if min_timestamp is not None:
+                    query = f"@timestamp:[{min_timestamp} +inf]=>[KNN {limit} @embedding $vec AS score]"
+                
+                params = {"vec": query_bytes}
+                
+                result = await self._redis.execute_command(
+                    "FT.SEARCH", f"{settings.REDIS_PREFIX}idx",
+                    query,
+                    "PARAMS", "2", "vec", query_bytes,
+                    "RETURN", "6", "title", "url", "source_url", "embedding", "timestamp", "score",
+                    "SORTBY", "score"
+                )
+                
+                processed_results = []
+                
+                if result and len(result) > 1:
+                    for i in range(1, len(result), 2):
+                        try:
+                            doc_id = int(result[i].decode().replace(f"{settings.REDIS_PREFIX}", ""))
                             
-                            if field == "embedding":
-                                # Parse binary vector
-                                try:
-                                    vector = np.frombuffer(value, dtype=np.float32)
-                                except Exception as e:
-                                    print(f"REDIS DEBUG: Error parsing vector: {e}")
-                                    continue
-                            else:
+                            # Skip if this is in the excluded IDs
+                            if exclude_ids is not None and doc_id in exclude_ids:
+                                continue
+                                
+                            values = result[i+1]
+                            attrs = {}
+                            
+                            for j in range(0, len(values), 2):
+                                field = values[j].decode()
+                                value = values[j+1]
+                                
                                 if isinstance(value, bytes):
-                                    value = value.decode()
+                                    if field != "embedding":
+                                        value = value.decode()
                                 attrs[field] = value
-                        
-                        if vector is not None and vector.shape == (settings.VECTOR_DIMENSIONS,):
-                            # Compute cosine similarity
-                            similarity = np.dot(query_np, vector) / (np.linalg.norm(query_np) * np.linalg.norm(vector))
+                            
+                            # Convert score to similarity (1 - distance)
+                            score = float(attrs.get("score", "1"))
+                            similarity = 1 - score
                             
                             processed_results.append({
                                 "id": doc_id,
                                 "title": attrs.get("title", ""),
                                 "url": attrs.get("url", ""),
                                 "source_url": attrs.get("source_url", ""),
-                                "similarity": float(similarity)
+                                "similarity": similarity,
+                                "timestamp": int(attrs.get("timestamp", "0"))
                             })
-                    except Exception as item_error:
-                        print(f"REDIS DEBUG: Error processing search result: {item_error}")
-                        continue
+                        except Exception as item_error:
+                            print(f"REDIS DEBUG: Error processing search result: {item_error}")
+                            continue
+                    
+                    # Sort by similarity
+                    processed_results.sort(key=lambda x: x["similarity"], reverse=True)
                 
-                # Sort by similarity
-                processed_results.sort(key=lambda x: x["similarity"], reverse=True)
-            
-            return processed_results
-            
+                return processed_results
+                
+            except Exception as e:
+                print(f"REDIS DEBUG: KNN search failed: {e}")
+                return []
+                
         except Exception as e:
             print(f"REDIS DEBUG: Error in vector search: {e}")
             return []
@@ -241,13 +296,20 @@ class RedisClient:
             await self.initialize()
             
         try:
-            # Get all news items in Redis
-            keys = await self._redis.keys(f"{settings.REDIS_PREFIX}*")
+            # Calculate minimum timestamp based on hours parameter
+            min_timestamp = int((datetime.now() - timedelta(hours=hours)).timestamp())
             
-            # Filter out the index key
-            keys = [key for key in keys if not key.decode().endswith("idx")]
+            # Get all news items in Redis within time window
+            command = [
+                "FT.SEARCH", f"{settings.REDIS_PREFIX}idx",
+                f"@timestamp:[{min_timestamp} +inf]",
+                "RETURN", "5", "title", "url", "source_url", "embedding", "timestamp",
+                "SORTBY", "timestamp", "DESC"  # Sort by timestamp descending
+            ]
             
-            if not keys:
+            result = await self._redis.execute_command(*command)
+            
+            if not result or len(result) <= 1:
                 return {}
                 
             # Initialize clusters
@@ -255,45 +317,73 @@ class RedisClient:
             next_cluster_id = 0
             processed_ids = set()
             
-            # Sort keys for deterministic ordering
-            keys.sort()
-            
             # Process each news item
-            for key in keys:
+            for i in range(1, len(result), 2):
                 try:
-                    news_id = int(key.decode().replace(settings.REDIS_PREFIX, ""))
-                except ValueError:
-                    continue
-                
-                if news_id in processed_ids:
-                    continue
-                
-                news_data = await self._redis.hgetall(key)
-                if not news_data or b"embedding" not in news_data:
-                    continue
-                
-                try:
-                    # Parse binary vector
-                    vector = np.frombuffer(news_data[b"embedding"], dtype=np.float32)
+                    doc_id = int(result[i].decode().replace(settings.REDIS_PREFIX, ""))
                     
-                    if vector.shape != (settings.VECTOR_DIMENSIONS,):
-                        print(f"REDIS DEBUG: Invalid vector shape in Redis: {vector.shape}")
+                    # Skip if this item is already in a cluster
+                    if doc_id in processed_ids:
                         continue
-                    
-                    # Get similar items
-                    similar_items = await self.search_vectors(vector, limit=100)
-                    
-                    # Filter by similarity threshold
-                    similar_items = [item for item in similar_items if item["similarity"] >= min_similarity]
-                    
-                    if similar_items:
-                        clusters[next_cluster_id] = similar_items
-                        for item in similar_items:
-                            processed_ids.add(item["id"])
-                        next_cluster_id += 1
                         
+                    values = result[i+1]
+                    vector = None
+                    attrs = {}
+                    
+                    # Extract fields
+                    for j in range(0, len(values), 2):
+                        field = values[j].decode()
+                        value = values[j+1]
+                        
+                        if field == "embedding":
+                            try:
+                                vector = np.frombuffer(value, dtype=np.float32)
+                            except Exception as e:
+                                print(f"REDIS DEBUG: Error parsing vector: {e}")
+                                continue
+                        else:
+                            if isinstance(value, bytes):
+                                value = value.decode()
+                            attrs[field] = value
+                    
+                    if vector is not None and vector.shape == (settings.VECTOR_DIMENSIONS,):
+                        # Get similar items within time window, excluding all processed items
+                        similar_items = await self.search_vectors(
+                            vector, 
+                            limit=100, 
+                            min_timestamp=min_timestamp,
+                            exclude_ids=processed_ids
+                        )
+                        
+                        # Filter by similarity threshold
+                        similar_items = [item for item in similar_items if item["similarity"] >= min_similarity]
+                        
+                        # Only create a cluster if there are similar items
+                        if similar_items:
+                            # Add the current item as the first item (center) of the cluster
+                            cluster_items = [{
+                                "id": doc_id,
+                                "title": attrs.get("title", ""),
+                                "url": attrs.get("url", ""),
+                                "source_url": attrs.get("source_url", ""),
+                                "similarity": 1.0,  # This is the center item
+                                "timestamp": int(attrs.get("timestamp", "0"))
+                            }]
+                            
+                            # Add similar items
+                            cluster_items.extend(similar_items)
+                            
+                            clusters[next_cluster_id] = cluster_items
+                            
+                            # Mark all items in cluster as processed
+                            processed_ids.add(doc_id)
+                            for item in similar_items:
+                                processed_ids.add(item["id"])
+                                
+                            next_cluster_id += 1
+                            
                 except Exception as e:
-                    print(f"Error processing vector for item {news_id}: {e}")
+                    print(f"Error processing vector for item {doc_id}: {e}")
                     continue
             
             return clusters
