@@ -1,3 +1,4 @@
+"""Web routes for the application."""
 from fastapi import APIRouter, Request, Form, Depends, HTTPException, Query
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -17,6 +18,8 @@ import logging
 logger = logging.getLogger(__name__)    
 router = APIRouter()
 
+# [Previous routes unchanged...]
+# Keeping all the routes up to /search unchanged for brevity
 @router.get("/", response_class=HTMLResponse)
 async def index(request: Request, db: AsyncSession = Depends(get_db)):
     """Render the home page."""
@@ -205,8 +208,8 @@ async def search_form(request: Request):
 async def view_clusters(
     request: Request,
     db: AsyncSession = Depends(get_db),
-    hours: int = Query(24, ge=1, le=168),
-    min_similarity: float = Query(0.6, ge=0.0, le=1.0)
+    hours: int = Query(48, ge=1, le=168),
+    min_similarity: float = Query(0.6, ge=0.0, le=1.0)  # Restored to 0.6
 ):
     """Render the news clusters page."""
     try:
@@ -308,7 +311,8 @@ async def view_clusters(
 async def view_umap(
     request: Request,
     db: AsyncSession = Depends(get_db),
-    hours: int = Query(24, ge=1, le=168)
+    hours: int = Query(48, ge=1, le=168),
+    min_similarity: float = Query(0.6, ge=0.0, le=1.0)  # Restored to 0.6
 ):
     """Render the UMAP visualization page."""
     try:
@@ -320,7 +324,7 @@ async def view_umap(
         
         # If no pre-generated visualization found, generate it
         if not umap_data:
-            visualization_data = await generate_umap_visualization(db, hours)
+            visualization_data = await generate_umap_visualization(db, hours, min_similarity)
         else:
             visualization_data = umap_data.visualization
         
@@ -329,7 +333,8 @@ async def view_umap(
             {
                 "request": request,
                 "initial_visualization": visualization_data,
-                "hours": hours
+                "hours": hours,
+                "min_similarity": min_similarity * 100  # Convert to percentage for display
             }
         )
     except Exception as e:

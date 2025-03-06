@@ -24,6 +24,10 @@
                 <label for="hours" class="form-label">Time Range (hours)</label>
                 <input type="number" class="form-control" id="hours" name="hours" value="{{ hours }}" min="1" max="168">
             </div>
+            <div class="flex-grow-1">
+                <label for="min_similarity" class="form-label">Minimum Similarity (%)</label>
+                <input type="number" class="form-control" id="min_similarity" name="min_similarity" value="{{ min_similarity }}" min="0" max="100">
+            </div>
             <div class="align-self-end">
                 <button type="submit" class="btn btn-primary">Update Visualization</button>
             </div>
@@ -43,10 +47,11 @@
     <div class="card-body">
         <h6 class="card-title mb-2"></h6>
         <p class="card-text small text-muted mb-0"></p>
+        <p class="card-text small text-muted mb-0 cluster-info"></p>
     </div>
 </div>
 
-<p class="text-muted">2D visualization of news articles using UMAP dimensionality reduction</p>
+<p class="text-muted">2D visualization of news articles using UMAP dimensionality reduction. Colors represent different clusters, and transparency indicates article age (newer articles are more opaque).</p>
 
 {% endblock %}
 
@@ -63,13 +68,14 @@ document.addEventListener('DOMContentLoaded', function() {
 
     async function loadVisualization() {
         const hours = document.getElementById('hours').value;
+        const minSimilarity = document.getElementById('min_similarity').value / 100;
 
         try {
             // First try to load from the current page with the new parameters
-            const response = await fetch(`/umap?hours=${hours}`);
+            const response = await fetch(`/umap?hours=${hours}&min_similarity=${minSimilarity}`);
             if (!response.ok) {
                 // If that fails, fall back to the API
-                const apiResponse = await fetch(`/api/news/umap?hours=${hours}`);
+                const apiResponse = await fetch(`/api/news/umap?hours=${hours}&min_similarity=${minSimilarity}`);
                 if (!apiResponse.ok) throw new Error('Failed to load visualization data');
                 const data = await apiResponse.json();
                 if (data.length === 0) {
@@ -121,6 +127,12 @@ document.addEventListener('DOMContentLoaded', function() {
             .domain([yExtent[0] - yPadding, yExtent[1] + yPadding])
             .range([height - margin.bottom, margin.top]);
 
+        // Create color scale for clusters
+        const uniqueClusters = [...new Set(data.map(d => d.cluster_id))].filter(id => id !== undefined);
+        const colorScale = d3.scaleOrdinal()
+            .domain(uniqueClusters)
+            .range(d3.schemeCategory10);
+
         // Create SVG
         svg = d3.select('#visualization')
             .append('svg')
@@ -135,8 +147,8 @@ document.addEventListener('DOMContentLoaded', function() {
             .attr('cx', d => xScale(d.x))
             .attr('cy', d => yScale(d.y))
             .attr('r', 5)
-            .attr('fill', '#007bff')
-            .attr('opacity', 0.6)
+            .attr('fill', d => d.cluster_id !== undefined ? colorScale(d.cluster_id) : '#cccccc')
+            .attr('opacity', d => d.opacity)
             .on('mouseover', function(event, d) {
                 d3.select(this)
                     .attr('r', 8)
@@ -148,17 +160,44 @@ document.addEventListener('DOMContentLoaded', function() {
                 tooltip.style.top = (y + 10) + 'px';
                 tooltip.querySelector('.card-title').textContent = d.title;
                 tooltip.querySelector('.card-text').textContent = new URL(d.source_url).hostname;
+                tooltip.querySelector('.cluster-info').textContent = d.cluster_id !== undefined ? 
+                    `Cluster ${d.cluster_id}` : 'Unclustered';
             })
-            .on('mouseout', function() {
+            .on('mouseout', function(d) {
                 d3.select(this)
                     .attr('r', 5)
-                    .attr('opacity', 0.6);
+                    .attr('opacity', d => d.opacity);
                 tooltip.style.display = 'none';
             })
             .on('click', function(event, d) {
                 window.open(d.url, '_blank');
             })
             .style('cursor', 'pointer');
+
+        // Add legend
+        const legendSpacing = 20;
+        const legendCircleRadius = 5;
+        const legendTextOffset = 10;
+
+        const legend = svg.append('g')
+            .attr('class', 'legend')
+            .attr('transform', `translate(${width - 100}, ${margin.top})`);
+
+        const legendItems = legend.selectAll('.legend-item')
+            .data(uniqueClusters)
+            .enter()
+            .append('g')
+            .attr('class', 'legend-item')
+            .attr('transform', (d, i) => `translate(0, ${i * legendSpacing})`);
+
+        legendItems.append('circle')
+            .attr('r', legendCircleRadius)
+            .attr('fill', d => colorScale(d));
+
+        legendItems.append('text')
+            .attr('x', legendTextOffset)
+            .attr('y', legendCircleRadius / 2)
+            .text(d => `Cluster ${d}`);
     }
 
     umapForm.addEventListener('submit', function(e) {
