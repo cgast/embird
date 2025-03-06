@@ -155,25 +155,34 @@ async def update_visualizations(db: AsyncSession):
             # Generate UMAP visualization
             umap_data = await generate_umap_visualization(db, hours, similarities[0])
             
-            # Check if UMAP visualization exists
-            stmt = select(NewsUMAP).filter(NewsUMAP.hours == hours)
-            result = await db.execute(stmt)
-            existing_umap = result.scalar_one_or_none()
-            
-            if existing_umap:
-                # Update existing visualization
-                stmt = update(NewsUMAP).where(NewsUMAP.hours == hours).values(
-                    visualization=umap_data,
-                    created_at=func.now()
+            # For each similarity value, generate and store UMAP visualization
+            for min_similarity in similarities:
+                # Check if UMAP visualization exists
+                stmt = select(NewsUMAP).filter(
+                    NewsUMAP.hours == hours,
+                    NewsUMAP.min_similarity == min_similarity
                 )
-                await db.execute(stmt)
-            else:
-                # Create new visualization
-                umap_viz = NewsUMAP(
-                    hours=hours,
-                    visualization=umap_data
-                )
-                db.add(umap_viz)
+                result = await db.execute(stmt)
+                existing_umap = result.scalar_one_or_none()
+                
+                if existing_umap:
+                    # Update existing visualization
+                    stmt = update(NewsUMAP).where(
+                        NewsUMAP.hours == hours,
+                        NewsUMAP.min_similarity == min_similarity
+                    ).values(
+                        visualization=umap_data,
+                        created_at=func.now()
+                    )
+                    await db.execute(stmt)
+                else:
+                    # Create new visualization
+                    umap_viz = NewsUMAP(
+                        hours=hours,
+                        min_similarity=min_similarity,
+                        visualization=umap_data
+                    )
+                    db.add(umap_viz)
             
             # Generate and store clusters for different similarities
             for min_similarity in similarities:

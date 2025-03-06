@@ -60,13 +60,15 @@ class NewsUMAP(Base):
     __tablename__ = "news_umap"
     
     id = Column(Integer, primary_key=True, index=True)
-    hours = Column(Integer, nullable=False, unique=True)
+    hours = Column(Integer, nullable=False)
+    min_similarity = Column(FLOAT, nullable=False)
     visualization = Column(JSON, nullable=False)  # Store visualization data as JSON
     created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
     
     __table_args__ = (
-        # Add index on hours for faster lookups of pre-generated visualizations
-        Index('idx_umap_hours', hours),
+        # Add index on hours and min_similarity for faster lookups
+        Index('idx_umap_hours_similarity', hours, min_similarity),
+        UniqueConstraint('hours', 'min_similarity', name='uix_umap_hours_similarity'),
     )
     
     def __repr__(self):

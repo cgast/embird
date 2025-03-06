@@ -322,8 +322,7 @@ async def view_umap(
         # Try to get pre-generated visualization
         result = await db.execute(
             select(NewsUMAP).filter(
-                NewsUMAP.hours == hours,
-                NewsUMAP.min_similarity == min_similarity
+                NewsUMAP.hours == hours
             ).order_by(NewsUMAP.created_at.desc())
         )
         umap_data = result.scalars().first()
