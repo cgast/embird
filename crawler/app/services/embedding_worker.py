@@ -4,10 +4,13 @@ Worker service that runs continuously to manage embeddings and vector operations
 import asyncio
 import logging
 from datetime import datetime, timedelta
+from typing import Optional
 from sqlalchemy import select, func, update
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import sessionmaker
 import json
+import numpy as np
+from pgvector.sqlalchemy import Vector
 
 from app.config import settings
 from app.models.news import NewsItem, NewsClusters, NewsUMAP
@@ -34,6 +37,30 @@ class EmbeddingWorker:
         self.embedding_service = EmbeddingService(settings.COHERE_API_KEY)
         self.running = False
     
+    def _validate_vector(self, vector_data) -> Optional[np.ndarray]:
+        """Validate vector from database."""
+        try:
+            # Handle pgvector data
+            if isinstance(vector_data, Vector):
+                vector = np.array(vector_data, dtype=np.float32)
+            # Handle array data
+            elif isinstance(vector_data, (list, np.ndarray)):
+                vector = np.array(vector_data, dtype=np.float32)
+            else:
+                logger.error(f"Invalid vector type from database: {type(vector_data)}")
+                return None
+
+            # Validate dimensions
+            if vector.shape != (settings.VECTOR_DIMENSIONS,):
+                logger.error(f"Invalid vector dimensions from database: {vector.shape}")
+                return None
+
+            return vector
+
+        except Exception as e:
+            logger.error(f"Error validating vector from database: {e}")
+            return None
+    
     async def sync_vectors_to_redis(self):
         """Sync recent vectors from PostgreSQL to Redis."""
         try:
@@ -52,28 +79,46 @@ class EmbeddingWorker:
                 redis_client = await get_redis_client()
                 
                 # Sync each item to Redis
+                synced_count = 0
+                error_count = 0
                 for item in news_items:
-                    # Store vector in Redis
-                    metadata = {
-                        "title": item.title,
-                        "url": item.url,
-                        "source_url": item.source_url
-                    }
-                    
-                    await redis_client.store_vector(
-                        news_id=item.id,
-                        embedding=item.embedding,
-                        metadata=metadata
-                    )
+                    try:
+                        # Validate vector from database
+                        vector = self._validate_vector(item.embedding)
+                        if vector is None:
+                            logger.warning(f"Skipping item {item.id} due to invalid vector")
+                            error_count += 1
+                            continue
+                        
+                        # Store vector in Redis
+                        metadata = {
+                            "title": item.title,
+                            "url": item.url,
+                            "source_url": item.source_url
+                        }
+                        
+                        success = await redis_client.store_vector(
+                            news_id=item.id,
+                            embedding=vector,
+                            metadata=metadata
+                        )
+                        
+                        if success:
+                            synced_count += 1
+                        else:
+                            error_count += 1
+                            
+                    except Exception as e:
+                        logger.error(f"Error processing item {item.id}: {e}")
+                        error_count += 1
                 
-                logger.info(f"Synced {len(news_items)} vectors to Redis")
+                logger.info(f"Synced {synced_count} vectors to Redis (Errors: {error_count})")
         except Exception as e:
             logger.error(f"Error syncing vectors to Redis: {str(e)}")
     
     async def update_visualizations(self):
         """Update pre-generated visualizations."""
         try:
-            # Create a database session
             async with AsyncSessionLocal() as session:
                 # Get Redis client for cluster generation
                 redis_client = await get_redis_client()

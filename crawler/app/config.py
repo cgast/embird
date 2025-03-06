@@ -24,6 +24,8 @@ class Settings(BaseSettings):
     MAX_CONCURRENT_REQUESTS: int = int(os.environ.get("MAX_CONCURRENT_REQUESTS", 5))
     REQUEST_TIMEOUT: int = int(os.environ.get("REQUEST_TIMEOUT", 30))  # seconds
     
+    DEBUG: bool = os.environ.get("DEBUG", "False").lower() in ("true", "1", "t")
+    
     # User agent for crawler
     USER_AGENT: str = os.environ.get(
         "USER_AGENT", 
