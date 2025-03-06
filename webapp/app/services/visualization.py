@@ -1,6 +1,6 @@
 """Shared visualization service for generating clusters and UMAP visualizations."""
 from datetime import datetime, timedelta
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple, Any
 import logging
 import umap
 from sqlalchemy import select, text
@@ -10,243 +10,128 @@ import numpy as np
 from app.models.news import NewsItem, NewsItemSimilarity
 from app.config import settings
 
-# Import Redis client
-from app.services.redis_client import get_redis_client, RedisClientContextManager
-
 logger = logging.getLogger(__name__)
 
 async def generate_clusters(
     db: AsyncSession,
     hours: int = 24,
     min_similarity: float = 0.2
-) -> Dict[int, List[NewsItemSimilarity]]:
-    """Generate news clusters based on vector similarity using Redis."""
+) -> Dict[int, List[dict]]:
+    """Generate news clusters based on vector similarity using PostgreSQL."""
     try:
-        # Try to use Redis for cluster generation
-        try:
-            # Get Redis client
-            async with RedisClientContextManager() as redis_client:
-                # Generate clusters using Redis
-                redis_clusters = await redis_client.get_clusters(hours, min_similarity)
-                
-                if redis_clusters:
-                    # Convert Redis clusters to the expected format
-                    response_clusters = {}
-                    
-                    for cluster_id, items in redis_clusters.items():
-                        # Try to get news items from the database for additional info
-                        item_ids = [item["id"] for item in items]
-                        stmt = select(NewsItem).filter(NewsItem.id.in_(item_ids))
-                        result = await db.execute(stmt)
-                        db_items = {item.id: item for item in result.scalars().all()}
-                        
-                        # Create NewsItemSimilarity objects
-                        response_items = []
-                        for item in items:
-                            # First try to create from database items for complete data
-                            if item["id"] in db_items:
-                                db_item = db_items[item["id"]]
-                                item_data = {
-                                    'id': db_item.id,
-                                    'title': db_item.title,
-                                    'summary': db_item.summary,
-                                    'url': db_item.url,
-                                    'source_url': db_item.source_url,
-                                    'first_seen_at': db_item.first_seen_at,
-                                    'last_seen_at': db_item.last_seen_at,
-                                    'hit_count': db_item.hit_count,
-                                    'created_at': db_item.created_at,
-                                    'updated_at': db_item.updated_at,
-                                    'similarity': item["similarity"]
-                                }
-                            else:
-                                # Item not in database, use Redis data with defaults for missing fields
-                                item_data = {
-                                    'id': item["id"],
-                                    'title': item.get("title", "Unknown Title"),
-                                    'summary': item.get("summary", None),
-                                    'url': item.get("url", ""),
-                                    'source_url': item.get("source_url", ""),
-                                    'similarity': item.get("similarity", 0.5),
-                                    'first_seen_at': datetime.now(),
-                                    'last_seen_at': datetime.now(),
-                                    'hit_count': 1,
-                                    'created_at': datetime.now(),
-                                    'updated_at': datetime.now()
-                                }
-                            
-                            try:
-                                # Add any missing required fields as a fallback
-                                if "summary" not in item_data:
-                                    item_data["summary"] = None
-                                if "first_seen_at" not in item_data:
-                                    item_data["first_seen_at"] = datetime.now()
-                                if "last_seen_at" not in item_data:
-                                    item_data["last_seen_at"] = datetime.now()
-                                if "hit_count" not in item_data:
-                                    item_data["hit_count"] = 1
-                                if "created_at" not in item_data:
-                                    item_data["created_at"] = datetime.now()
-                                if "updated_at" not in item_data:
-                                    item_data["updated_at"] = datetime.now()
-                                    
-                                response_item = NewsItemSimilarity.model_validate(item_data)
-                                response_items.append(response_item)
-                            except Exception as model_error:
-                                print(f"Error creating NewsItemSimilarity model: {model_error}, data: {item_data}")
-                        
-                        if response_items:
-                            response_clusters[cluster_id] = sorted(
-                                response_items, 
-                                key=lambda x: x.similarity, 
-                                reverse=True
-                            )
-                    
-                    logger.info(f"Generated {len(response_clusters)} clusters using Redis")
-                    return response_clusters
-        
-        except Exception as e:
-            logger.warning(f"Failed to generate clusters using Redis: {str(e)}")
-            logger.warning("Falling back to database clustering")
-            
-        # If Redis clustering failed or returned no results, fall back to database
         # Get news items from the last n hours
         time_filter = datetime.utcnow() - timedelta(hours=hours)
         
-        # Get all news items with embeddings from the specified time period
-        stmt = select(NewsItem).filter(
+        # First, get all the recent news items with embeddings
+        items_query = select(NewsItem).filter(
             NewsItem.last_seen_at >= time_filter,
             NewsItem.embedding.is_not(None)
         ).order_by(NewsItem.last_seen_at.desc())
         
-        result = await db.execute(stmt)
+        result = await db.execute(items_query)
         news_items = result.scalars().all()
         
-        if not news_items:
-            return {}
-            
-        # Use direct SQL for faster clustering
-        # This generates clusters in a single query using PostgreSQL's vector operations
-        cluster_query = text("""
+        # Create a dictionary to store items by ID for easy lookup
+        items_by_id = {item.id: item for item in news_items}
+        
+        # Get all pairwise similarities above threshold
+        similarity_query = text("""
             WITH items AS (
-                SELECT id, title, summary, url, source_url, first_seen_at, last_seen_at, 
-                       hit_count, created_at, updated_at, embedding
+                SELECT id 
                 FROM news
                 WHERE last_seen_at >= :time_filter AND embedding IS NOT NULL
                 ORDER BY last_seen_at DESC
-            ),
-            similarities AS (
-                SELECT 
-                    a.id AS item_id,
-                    b.id AS related_id,
-                    1 - cosine_distance(a.embedding, b.embedding) AS similarity
-                FROM items a
-                JOIN items b ON a.id <> b.id
-                WHERE 1 - cosine_distance(a.embedding, b.embedding) >= :min_similarity
-            ),
-            clusters AS (
-                SELECT 
-                    item_id,
-                    ARRAY_AGG(related_id ORDER BY similarity DESC) AS related_ids,
-                    ARRAY_AGG(similarity ORDER BY similarity DESC) AS similarities
-                FROM similarities
-                GROUP BY item_id
             )
             SELECT 
-                c.item_id,
-                c.related_ids,
-                c.similarities,
-                i.title,
-                i.summary,
-                i.url,
-                i.source_url,
-                i.first_seen_at,
-                i.last_seen_at,
-                i.hit_count,
-                i.created_at,
-                i.updated_at
-            FROM clusters c
-            JOIN items i ON c.item_id = i.id
-            ORDER BY i.last_seen_at DESC
+                a.id AS item1_id,
+                b.id AS item2_id,
+                1 - cosine_distance(a.embedding, b.embedding) AS similarity
+            FROM news a
+            JOIN news b ON a.id < b.id  -- Use < instead of != to avoid duplicates
+            JOIN items ia ON a.id = ia.id
+            JOIN items ib ON b.id = ib.id
+            WHERE 1 - cosine_distance(a.embedding, b.embedding) >= :min_similarity
+            ORDER BY similarity DESC
         """)
         
-        # Execute the query
-        result = await db.execute(cluster_query, {
+        # Execute the similarity query
+        similarity_result = await db.execute(similarity_query, {
             "time_filter": time_filter,
             "min_similarity": min_similarity
         })
         
-        # Process results into clusters
-        response_clusters = {}
-        cluster_id = 0
-        processed_ids = set()
+        # Build an undirected graph of similar items
+        similarity_pairs = []
+        for row in similarity_result:
+            similarity_pairs.append((row.item1_id, row.item2_id, row.similarity))
         
-        for row in result:
-            # Skip items that are already in a cluster
-            if row.item_id in processed_ids:
+        # Create a graph representation
+        graph = {}
+        for item1_id, item2_id, similarity in similarity_pairs:
+            if item1_id not in graph:
+                graph[item1_id] = []
+            if item2_id not in graph:
+                graph[item2_id] = []
+            
+            graph[item1_id].append((item2_id, similarity))
+            graph[item2_id].append((item1_id, similarity))
+        
+        # Find connected components (clusters)
+        visited = set()
+        clusters = []
+        
+        for node in graph:
+            if node in visited:
                 continue
                 
-            # Create a new cluster
+            # Start a new cluster
             cluster = []
+            queue = [(node, 1.0)]  # (node_id, similarity to center)
+            cluster_visited = set()
             
-            # Add the center item with similarity 1.0
-            center_item_data = {
-                'id': row.item_id,
-                'title': row.title,
-                'summary': row.summary,
-                'url': row.url,
-                'source_url': row.source_url,
-                'first_seen_at': row.first_seen_at,
-                'last_seen_at': row.last_seen_at,
-                'hit_count': row.hit_count,
-                'created_at': row.created_at,
-                'updated_at': row.updated_at,
-                'similarity': 1.0
-            }
-            center_item = NewsItemSimilarity.model_validate(center_item_data)
-            cluster.append(center_item)
-            
-            # Add related items
-            for i, related_id in enumerate(row.related_ids):
-                # Skip already processed items
-                if related_id in processed_ids:
+            while queue:
+                current, similarity = queue.pop(0)
+                
+                if current in cluster_visited:
                     continue
                     
-                # Get similarity
-                similarity = row.similarities[i]
+                cluster_visited.add(current)
+                visited.add(current)
                 
-                # Get related item details
-                related_result = await db.execute(select(NewsItem).filter(NewsItem.id == related_id))
-                related_item = related_result.scalars().first()
-                
-                if related_item:
-                    related_item_data = {
-                        'id': related_item.id,
-                        'title': related_item.title,
-                        'summary': related_item.summary,
-                        'url': related_item.url,
-                        'source_url': related_item.source_url,
-                        'first_seen_at': related_item.first_seen_at,
-                        'last_seen_at': related_item.last_seen_at,
-                        'hit_count': related_item.hit_count,
-                        'created_at': related_item.created_at,
-                        'updated_at': related_item.updated_at,
+                if current in items_by_id:
+                    item = items_by_id[current]
+                    cluster.append({
+                        'id': item.id,
+                        'title': item.title,
+                        'summary': item.summary,
+                        'url': item.url,
+                        'source_url': item.source_url,
+                        'first_seen_at': item.first_seen_at,
+                        'last_seen_at': item.last_seen_at,
+                        'hit_count': item.hit_count,
+                        'created_at': item.created_at,
+                        'updated_at': item.updated_at,
                         'similarity': similarity
-                    }
-                    related_item_obj = NewsItemSimilarity.model_validate(related_item_data)
-                    cluster.append(related_item_obj)
-                    
-                    # Mark as processed
-                    processed_ids.add(related_id)
-            
-            # Add the cluster if it has items
-            if cluster:
-                response_clusters[cluster_id] = cluster
-                cluster_id += 1
+                    })
                 
-                # Mark center item as processed
-                processed_ids.add(row.item_id)
+                if current in graph:
+                    for neighbor, edge_similarity in graph[current]:
+                        if neighbor not in cluster_visited:
+                            # Calculate transitive similarity (product of similarities along the path)
+                            transitive_similarity = similarity * edge_similarity
+                            queue.append((neighbor, transitive_similarity))
+            
+            # Add cluster if it has at least 2 items
+            if len(cluster) >= 2:
+                # Sort by similarity descending
+                cluster.sort(key=lambda x: x['similarity'], reverse=True)
+                clusters.append(cluster)
         
+        # Sort clusters by size (descending) and recency
+        clusters.sort(key=lambda x: (len(x), max(item['last_seen_at'] for item in x)), reverse=True)
+        
+        # Format the response
+        response_clusters = {i: cluster for i, cluster in enumerate(clusters)}
         return response_clusters
         
     except Exception as e:

@@ -230,36 +230,57 @@ async def view_clusters(
         for cluster_id, items in clusters_data.items():
             serializable_items = []
             for item in items:
-                # Check if item is a Pydantic model or an ORM model
-                if hasattr(item, '__dict__') and not isinstance(item, dict):
-                    # Convert each NewsItemSimilarity to a dict with only needed fields
+                # Item should already be a dictionary
+                if isinstance(item, dict):
+                    # Use get() for all fields to handle missing values safely
+                    item_dict = {
+                        'id': item.get('id', 0),
+                        'title': item.get('title', ''),
+                        'summary': item.get('summary', None),
+                        'url': item.get('url', ''),
+                        'source_url': item.get('source_url', ''),
+                        'similarity': item.get('similarity', 0.0),
+                        'hit_count': item.get('hit_count', 1),
+                    }
+                    
+                    # Handle datetime fields carefully
+                    first_seen = item.get('first_seen_at')
+                    if first_seen:
+                        item_dict['first_seen_at'] = first_seen.isoformat() if hasattr(first_seen, 'isoformat') else first_seen
+                    else:
+                        item_dict['first_seen_at'] = datetime.now().isoformat()
+                        
+                    last_seen = item.get('last_seen_at')
+                    if last_seen:
+                        item_dict['last_seen_at'] = last_seen.isoformat() if hasattr(last_seen, 'isoformat') else last_seen
+                    else:
+                        item_dict['last_seen_at'] = datetime.now().isoformat()
+                        
+                    created_at = item.get('created_at')
+                    if created_at:
+                        item_dict['created_at'] = created_at.isoformat() if hasattr(created_at, 'isoformat') else created_at
+                    else:
+                        item_dict['created_at'] = datetime.now().isoformat()
+                        
+                    updated_at = item.get('updated_at')
+                    if updated_at:
+                        item_dict['updated_at'] = updated_at.isoformat() if hasattr(updated_at, 'isoformat') else updated_at
+                    else:
+                        item_dict['updated_at'] = datetime.now().isoformat()
+                # But if it's a model, convert it
+                else:
                     item_dict = {
                         'id': item.id,
                         'title': item.title,
                         'summary': item.summary,
                         'url': item.url,
                         'source_url': item.source_url,
+                        'similarity': item.similarity,
                         'first_seen_at': item.first_seen_at.isoformat() if hasattr(item.first_seen_at, 'isoformat') else item.first_seen_at,
                         'last_seen_at': item.last_seen_at.isoformat() if hasattr(item.last_seen_at, 'isoformat') else item.last_seen_at,
                         'hit_count': item.hit_count,
                         'created_at': item.created_at.isoformat() if hasattr(item.created_at, 'isoformat') else item.created_at,
-                        'updated_at': item.updated_at.isoformat() if hasattr(item.updated_at, 'isoformat') else item.updated_at,
-                        'similarity': item.similarity
-                    }
-                else:
-                    # Item is already a dictionary
-                    item_dict = {
-                        'id': item.get('id'),
-                        'title': item.get('title', ''),
-                        'summary': item.get('summary'),
-                        'url': item.get('url', ''),
-                        'source_url': item.get('source_url', ''),
-                        'first_seen_at': item.get('first_seen_at', datetime.now().isoformat()),
-                        'last_seen_at': item.get('last_seen_at', datetime.now().isoformat()),
-                        'hit_count': item.get('hit_count', 1),
-                        'created_at': item.get('created_at', datetime.now().isoformat()),
-                        'updated_at': item.get('updated_at', datetime.now().isoformat()),
-                        'similarity': item.get('similarity', 0.5)
+                        'updated_at': item.updated_at.isoformat() if hasattr(item.updated_at, 'isoformat') else item.updated_at
                     }
                 serializable_items.append(item_dict)
             serializable_clusters[str(cluster_id)] = serializable_items
