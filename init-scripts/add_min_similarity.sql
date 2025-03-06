@@ -1,5 +1,5 @@
 -- Add min_similarity column to news_umap table if it doesn't exist
-DO $$
+DO $BLOCK$
 BEGIN
     IF NOT EXISTS (
         SELECT 1 
