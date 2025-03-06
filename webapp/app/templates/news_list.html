@@ -24,8 +24,9 @@
                 <div>&nbsp;</div>
             </div>
             {% endfor %}
-        <!-- Pagination -->
-        {% if total_pages > 1 %}
+            
+            <!-- Pagination -->
+            {% if total_pages > 1 %}
         <div class="mt-4">
             <nav aria-label="Page navigation">
                 <ul class="pagination justify-content-center">
@@ -71,7 +72,7 @@
                         <select class="form-select" id="source_url" name="source_url">
                             <option value="">All Sources</option>
                             {% for url in urls %}
-                            <option value="{{ url.url }}" {% if current_source == url.url %}selected{% endif %}>
+                            <option value="{{ url.url }}" {% if current_source and current_source == url.url %}selected{% endif %}>
                                 {{ url.url }} ({{ url.type }})
                             </option>
                             {% endfor %}
