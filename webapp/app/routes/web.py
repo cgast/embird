@@ -316,17 +316,27 @@ async def view_umap(
 ):
     """Render the UMAP visualization page."""
     try:
+        start_time = time.time()
+        logger.info(f"Generating UMAP visualization with hours={hours}, min_similarity={min_similarity}")
+        
         # Try to get pre-generated visualization
         result = await db.execute(
-            select(NewsUMAP).filter(NewsUMAP.hours == hours).order_by(NewsUMAP.created_at.desc())
+            select(NewsUMAP).filter(
+                NewsUMAP.hours == hours,
+                NewsUMAP.min_similarity == min_similarity
+            ).order_by(NewsUMAP.created_at.desc())
         )
         umap_data = result.scalars().first()
         
         # If no pre-generated visualization found, generate it
         if not umap_data:
+            logger.info("No pre-generated UMAP data found, generating new visualization")
             visualization_data = await generate_umap_visualization(db, hours, min_similarity)
         else:
+            logger.info(f"Using pre-generated UMAP data from {umap_data.created_at}")
             visualization_data = umap_data.visualization
+        
+        logger.info(f"UMAP visualization generated in {time.time() - start_time:.2f} seconds")
         
         return request.state.templates.TemplateResponse(
             "news_umap.html",
@@ -338,7 +348,7 @@ async def view_umap(
             }
         )
     except Exception as e:
-        logger.error(f"Error loading UMAP visualization: {str(e)}")
+        logger.error(f"Error loading UMAP visualization: {str(e)}", exc_info=True)
         return request.state.templates.TemplateResponse(
             "news_umap.html",
             {

@@ -71,27 +71,19 @@ document.addEventListener('DOMContentLoaded', function() {
         const minSimilarity = document.getElementById('min_similarity').value / 100;
 
         try {
-            // First try to load from the current page with the new parameters
-            const response = await fetch(`/umap?hours=${hours}&min_similarity=${minSimilarity}`);
-            if (!response.ok) {
-                // If that fails, fall back to the API
-                const apiResponse = await fetch(`/api/news/umap?hours=${hours}&min_similarity=${minSimilarity}`);
-                if (!apiResponse.ok) throw new Error('Failed to load visualization data');
-                const data = await apiResponse.json();
-                if (data.length === 0) {
-                    document.getElementById('visualization').innerHTML = `
-                        <div class="alert alert-info">
-                            No news articles found for the selected time range.
-                        </div>
-                    `;
-                    return;
-                }
-                createVisualization(data);
-            } else {
-                // If the page load succeeds, replace the current page
-                const html = await response.text();
-                document.documentElement.innerHTML = html;
-            }
+            console.log(`Loading visualization with hours=${hours}, min_similarity=${minSimilarity}`);
+            
+            // Show loading indicator
+            document.getElementById('visualization').innerHTML = `
+                <div class="d-flex justify-content-center align-items-center" style="height: 100%">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                </div>
+            `;
+            
+            // Use window.location to navigate to the page with new parameters
+            window.location.href = `/umap?hours=${hours}&min_similarity=${minSimilarity}`;
         } catch (error) {
             console.error('Error loading visualization:', error);
             document.getElementById('visualization').innerHTML = `
@@ -128,7 +120,9 @@ document.addEventListener('DOMContentLoaded', function() {
             .range([height - margin.bottom, margin.top]);
 
         // Create color scale for clusters
-        const uniqueClusters = [...new Set(data.map(d => d.cluster_id))].filter(id => id !== undefined);
+        const uniqueClusters = [...new Set(data.map(d => d.cluster_id))].filter(id => id !== undefined && id !== null);
+        console.log("Unique clusters:", uniqueClusters);
+        
         const colorScale = d3.scaleOrdinal()
             .domain(uniqueClusters)
             .range(d3.schemeCategory10);
@@ -147,8 +141,9 @@ document.addEventListener('DOMContentLoaded', function() {
             .attr('cx', d => xScale(d.x))
             .attr('cy', d => yScale(d.y))
             .attr('r', 5)
-            .attr('fill', d => d.cluster_id !== undefined ? colorScale(d.cluster_id) : '#cccccc')
-            .attr('opacity', d => d.opacity)
+            .attr('fill', d => d.cluster_id !== undefined && d.cluster_id !== null ? 
+                colorScale(d.cluster_id) : '#cccccc')
+            .attr('opacity', d => d.opacity !== undefined ? d.opacity : 0.7)
             .on('mouseover', function(event, d) {
                 d3.select(this)
                     .attr('r', 8)
@@ -156,17 +151,17 @@ document.addEventListener('DOMContentLoaded', function() {
 
                 const [x, y] = d3.pointer(event);
                 tooltip.style.display = 'block';
-                tooltip.style.left = (x + 10) + 'px';
-                tooltip.style.top = (y + 10) + 'px';
+                tooltip.style.left = (event.pageX + 10) + 'px';
+                tooltip.style.top = (event.pageY + 10) + 'px';
                 tooltip.querySelector('.card-title').textContent = d.title;
                 tooltip.querySelector('.card-text').textContent = new URL(d.source_url).hostname;
-                tooltip.querySelector('.cluster-info').textContent = d.cluster_id !== undefined ? 
+                tooltip.querySelector('.cluster-info').textContent = d.cluster_id !== undefined && d.cluster_id !== null ? 
                     `Cluster ${d.cluster_id}` : 'Unclustered';
             })
-            .on('mouseout', function(d) {
+            .on('mouseout', function() {
                 d3.select(this)
                     .attr('r', 5)
-                    .attr('opacity', d => d.opacity);
+                    .attr('opacity', d => d.opacity !== undefined ? d.opacity : 0.7);
                 tooltip.style.display = 'none';
             })
             .on('click', function(event, d) {
@@ -174,30 +169,48 @@ document.addEventListener('DOMContentLoaded', function() {
             })
             .style('cursor', 'pointer');
 
-        // Add legend
-        const legendSpacing = 20;
-        const legendCircleRadius = 5;
-        const legendTextOffset = 10;
+        // Add legend if there are clusters
+        if (uniqueClusters.length > 0) {
+            const legendSpacing = 20;
+            const legendCircleRadius = 5;
+            const legendTextOffset = 10;
 
-        const legend = svg.append('g')
-            .attr('class', 'legend')
-            .attr('transform', `translate(${width - 100}, ${margin.top})`);
+            const legend = svg.append('g')
+                .attr('class', 'legend')
+                .attr('transform', `translate(${width - 120}, ${margin.top})`);
 
-        const legendItems = legend.selectAll('.legend-item')
-            .data(uniqueClusters)
-            .enter()
-            .append('g')
-            .attr('class', 'legend-item')
-            .attr('transform', (d, i) => `translate(0, ${i * legendSpacing})`);
+            const legendItems = legend.selectAll('.legend-item')
+                .data(uniqueClusters)
+                .enter()
+                .append('g')
+                .attr('class', 'legend-item')
+                .attr('transform', (d, i) => `translate(0, ${i * legendSpacing})`);
 
-        legendItems.append('circle')
-            .attr('r', legendCircleRadius)
-            .attr('fill', d => colorScale(d));
+            legendItems.append('circle')
+                .attr('r', legendCircleRadius)
+                .attr('fill', d => colorScale(d));
 
-        legendItems.append('text')
-            .attr('x', legendTextOffset)
-            .attr('y', legendCircleRadius / 2)
-            .text(d => `Cluster ${d}`);
+            legendItems.append('text')
+                .attr('x', legendTextOffset)
+                .attr('y', legendCircleRadius / 2)
+                .text(d => `Cluster ${d}`);
+                
+            // Add unclustered to legend
+            legend.append('g')
+                .attr('class', 'legend-item')
+                .attr('transform', `translate(0, ${uniqueClusters.length * legendSpacing})`)
+                .append('circle')
+                .attr('r', legendCircleRadius)
+                .attr('fill', '#cccccc');
+                
+            legend.append('g')
+                .attr('class', 'legend-item')
+                .attr('transform', `translate(0, ${uniqueClusters.length * legendSpacing})`)
+                .append('text')
+                .attr('x', legendTextOffset)
+                .attr('y', legendCircleRadius / 2)
+                .text('Unclustered');
+        }
     }
 
     umapForm.addEventListener('submit', function(e) {
