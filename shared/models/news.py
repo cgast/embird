@@ -26,9 +26,12 @@ class NewsItem(Base):
     
     __table_args__ = (
         # Add index on embedding for faster vector similarity calculations
-        Index('idx_news_embedding', embedding, postgresql_using='ivfflat'),
-        # Add index on last_seen_at and embedding for faster filtered similarity searches
-        Index('idx_news_last_seen_embedding', last_seen_at.desc(), embedding, postgresql_using='ivfflat'),
+        Index('idx_news_embedding', embedding, 
+              postgresql_using='ivfflat',
+              postgresql_ops={'embedding': 'vector_cosine_ops'},
+              postgresql_with={'lists': 100}),
+        # Add separate index on last_seen_at for faster timestamp filtering
+        Index('idx_news_last_seen', last_seen_at.desc()),
     )
     
     def __repr__(self):

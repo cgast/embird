@@ -43,3 +43,4 @@ ENV/
 *.sqlite3
 *.local
 .aider*
+CLAUDE.md
