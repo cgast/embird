@@ -69,7 +69,7 @@ class RedisClient:
             # Only create index if it doesn't exist
             if f"{settings.REDIS_PREFIX}idx".encode() not in indices and not any(idx.decode() == f"{settings.REDIS_PREFIX}idx" for idx in indices if hasattr(idx, 'decode')):
                 try:
-                    # Create vector index with FLAT type
+                    # Create vector index with HNSW algorithm
                     schema_args = [
                         "ON", "HASH",
                         "PREFIX", "1", settings.REDIS_PREFIX,
@@ -77,7 +77,7 @@ class RedisClient:
                         "embedding", "VECTOR", "FLOAT32", 
                         "DIM", str(settings.VECTOR_DIMENSIONS), 
                         "DISTANCE_METRIC", "COSINE",
-                        "TYPE", "FLAT",
+                        "TYPE", "HNSW", "M", "16", "EF_CONSTRUCTION", "200",
                         "title", "TEXT", "SORTABLE",
                         "url", "TEXT", "SORTABLE",
                         "source_url", "TEXT", "SORTABLE",
@@ -201,11 +201,11 @@ class RedisClient:
             # Build vector search query
             try:
                 print("REDIS DEBUG: Attempting KNN search")
-                # Build KNN query for Redis Stack 7.2
+                # Build KNN query for RediSearch 2.8
                 if min_timestamp is not None:
-                    query = f"@timestamp:[{min_timestamp} +inf] @embedding:[KNN {limit} $vec AS score]"
+                    query = f"@timestamp:[{min_timestamp} +inf]=>[KNN {limit} @embedding $vec]"
                 else:
-                    query = f"*=>[KNN {limit} @embedding $vec AS score]"
+                    query = f"*=>[KNN {limit} @embedding $vec]"
                 
                 result = await self._redis.execute_command(
                     "FT.SEARCH", f"{settings.REDIS_PREFIX}idx",
