@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+
+{% block title %}Delete URL - news-suck{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col">
+        <h1>Delete URL</h1>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-8 offset-md-2">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">Are you sure you want to delete this URL?</h5>
+                
+                <div class="alert alert-warning">
+                    <p><strong>URL:</strong> {{ url.url }}</p>
+                    <p><strong>Type:</strong> {{ url.type }}</p>
+                    <p><strong>Added:</strong> {{ url.created_at.strftime('%Y-%m-%d %H:%M') }}</p>
+                </div>
+                
+                <p>This action cannot be undone.</p>
+                
+                <form method="post" action="/urls/{{ url.id }}/delete">
+                    <div class="d-grid gap-2">
+                        <button type="submit" class="btn btn-danger">Yes, Delete URL</button>
+                        <a href="/urls" class="btn btn-outline-secondary">Cancel</a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

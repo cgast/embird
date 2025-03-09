@@ -5,12 +5,14 @@ services:
   webapp:
     build:
       context: .
-      dockerfile: webapp/Dockerfile
+      dockerfile: Dockerfile
     ports:
       - "8000:8000"
     volumes:
       - sqlite_data:/app/data
     environment:
+      - SERVICE_TYPE=webapp
+      - PORT=8000
       - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/newsdb
       - SQLITE_PATH=/app/data/urls.db
       - COHERE_API_KEY=${COHERE_API_KEY}
@@ -26,8 +28,6 @@ services:
   # Postgres with pgvector extension for vector embeddings
   postgres:
     image: pgvector/pgvector:pg15
-    #ports:
-    #  - "5432:5432"
     environment:
       - POSTGRES_USER=postgres
       - POSTGRES_PASSWORD=postgres
@@ -45,9 +45,6 @@ services:
   # Redis with RedisSearch for vector operations
   redis:
     image: redis/redis-stack:7.2.0-v6
-    #ports:
-      #- "6379:6379"  # Redis port
-      #- "8001:8001"  # RedisInsight UI
     volumes:
       - redis_data:/data
     healthcheck:
@@ -61,10 +58,11 @@ services:
   crawler:
     build:
       context: .
-      dockerfile: crawler/Dockerfile
+      dockerfile: Dockerfile
     volumes:
       - sqlite_data:/app/data
     environment:
+      - SERVICE_TYPE=crawler
       - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/newsdb
       - SQLITE_PATH=/app/data/urls.db
       - COHERE_API_KEY=${COHERE_API_KEY}
@@ -81,7 +79,7 @@ services:
   embeddings:
     build:
       context: .
-      dockerfile: crawler/Dockerfile
+      dockerfile: Dockerfile
     command: python -m app.services.embedding_worker
     environment:
       - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/newsdb
