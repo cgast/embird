@@ -69,14 +69,15 @@ class RedisClient:
             # Only create index if it doesn't exist
             if f"{settings.REDIS_PREFIX}idx".encode() not in indices and not any(idx.decode() == f"{settings.REDIS_PREFIX}idx" for idx in indices if hasattr(idx, 'decode')):
                 try:
-                    # Create vector index with HNSW algorithm and timestamp field
+                    # Create vector index with FLAT type
                     schema_args = [
                         "ON", "HASH",
                         "PREFIX", "1", settings.REDIS_PREFIX,
                         "SCHEMA",
-                        "embedding", "VECTOR", "HNSW", "6", "TYPE", "FLOAT32", 
+                        "embedding", "VECTOR", "FLOAT32", 
                         "DIM", str(settings.VECTOR_DIMENSIONS), 
                         "DISTANCE_METRIC", "COSINE",
+                        "TYPE", "FLAT",
                         "title", "TEXT", "SORTABLE",
                         "url", "TEXT", "SORTABLE",
                         "source_url", "TEXT", "SORTABLE",
@@ -102,30 +103,6 @@ class RedisClient:
                     
                 except Exception as e:
                     print(f"REDIS DEBUG: Error creating index: {e}")
-                    # Try alternative syntax for older Redis versions
-                    try:
-                        print("REDIS DEBUG: Trying alternative index creation syntax")
-                        schema_args = [
-                            "ON", "HASH",
-                            "PREFIX", "1", settings.REDIS_PREFIX,
-                            "SCHEMA",
-                            "embedding", "VECTOR", "16", "FLOAT32", 
-                            "DIM", str(settings.VECTOR_DIMENSIONS), 
-                            "DISTANCE_METRIC", "COSINE",
-                            "TYPE", "HNSW",
-                            "title", "TEXT", "SORTABLE",
-                            "url", "TEXT", "SORTABLE",
-                            "source_url", "TEXT", "SORTABLE",
-                            "timestamp", "NUMERIC", "SORTABLE"
-                        ]
-                        
-                        command = ["FT.CREATE", f"{settings.REDIS_PREFIX}idx"] + schema_args
-                        print(f"REDIS DEBUG: Creating index with alternative command: {' '.join(str(x) for x in command)}")
-                        
-                        result = await self._redis.execute_command(*command)
-                        print(f"REDIS DEBUG: Alternative index creation result: {result}")
-                    except Exception as alt_e:
-                        print(f"REDIS DEBUG: Alternative index creation also failed: {alt_e}")
             else:
                 print(f"REDIS DEBUG: Index {settings.REDIS_PREFIX}idx already exists")
                 # Get index info
@@ -221,14 +198,14 @@ class RedisClient:
             # Convert to binary
             query_bytes = query_np.tobytes()
             
-            # Build KNN search query
+            # Build vector search query
             try:
                 print("REDIS DEBUG: Attempting KNN search")
-                query = f"*=>[KNN {limit} @embedding $vec]"  # Removed "AS score"
+                # Build KNN query for Redis Stack 7.2
                 if min_timestamp is not None:
-                    query = f"@timestamp:[{min_timestamp} +inf]=>[KNN {limit} @embedding $vec]"  # Removed "AS score"
-                
-                params = {"vec": query_bytes}
+                    query = f"@timestamp:[{min_timestamp} +inf] @embedding:[KNN {limit} $vec AS score]"
+                else:
+                    query = f"*=>[KNN {limit} @embedding $vec AS score]"
                 
                 result = await self._redis.execute_command(
                     "FT.SEARCH", f"{settings.REDIS_PREFIX}idx",
@@ -261,9 +238,9 @@ class RedisClient:
                                         value = value.decode()
                                 attrs[field] = value
                             
-                            # Convert score to similarity (1 - distance)
+                            # Convert score to similarity
                             score = float(attrs.get("score", "1"))
-                            similarity = 1 - score
+                            similarity = 1 - score  # Convert distance to similarity
                             
                             processed_results.append({
                                 "id": doc_id,
