@@ -13,7 +13,7 @@ import numpy as np
 import umap
 
 from app.models.url import URL, URLCreate, URLDatabase
-from app.models.news import (  # Updated import path
+from app.models.news import (
     NewsItem, NewsItemResponse, NewsItemSimilarity,
     NewsClusters, NewsUMAP,
     NewsClustersResponse, NewsUMAPResponse
@@ -28,19 +28,15 @@ logger = logging.getLogger(__name__)
 router = APIRouter(tags=["api"])
 
 @router.get("/news/umap", response_model=List[dict])
-async def get_news_umap(
-    db: AsyncSession = Depends(get_db),
-    hours: int = Query(24, ge=1, le=168),  # Default 24 hours, max 1 week
-    min_similarity: float = Query(0.6, ge=0.0, le=100.0)  # Accept both decimal and percentage values
-):
+async def get_news_umap(db: AsyncSession = Depends(get_db)):
     """Get UMAP visualization data for news items."""
     try:
-        # Convert percentage to decimal if needed
-        normalized_similarity = min_similarity / 100.0 if min_similarity > 1.0 else min_similarity
-        
         # Try to get pre-generated visualization
         result = await db.execute(
-            select(NewsUMAP).filter(NewsUMAP.hours == hours).order_by(NewsUMAP.created_at.desc())
+            select(NewsUMAP).filter(
+                NewsUMAP.hours == settings.VISUALIZATION_TIME_RANGE,
+                NewsUMAP.min_similarity == settings.VISUALIZATION_SIMILARITY
+            ).order_by(NewsUMAP.created_at.desc())
         )
         umap_data = result.scalars().first()
         
@@ -48,7 +44,7 @@ async def get_news_umap(
             return umap_data.visualization
         
         # If no pre-generated data, generate it now
-        return await generate_umap_visualization(db, hours, normalized_similarity)
+        return await generate_umap_visualization(db)
         
     except Exception as e:
         logging.error(f"UMAP visualization error: {str(e)}")
@@ -233,21 +229,14 @@ async def search_news(
         raise HTTPException(status_code=422, detail=str(e))
 
 @router.get("/news/clusters", response_model=Dict[str, List[Dict]])
-async def get_news_clusters(
-    db: AsyncSession = Depends(get_db),
-    hours: int = Query(24, ge=1, le=168),  # Default 24 hours, max 1 week
-    min_similarity: float = Query(0.6, ge=0.0, le=100.0)  # Accept both decimal and percentage values
-):
+async def get_news_clusters(db: AsyncSession = Depends(get_db)):
     """Get clustered news items based on vector similarity."""
     try:
-        # Convert percentage to decimal if needed
-        normalized_similarity = min_similarity / 100.0 if min_similarity > 1.0 else min_similarity
-        
         # Try to get pre-generated clusters
         result = await db.execute(
             select(NewsClusters).filter(
-                NewsClusters.hours == hours,
-                NewsClusters.min_similarity == normalized_similarity
+                NewsClusters.hours == settings.VISUALIZATION_TIME_RANGE,
+                NewsClusters.min_similarity == settings.VISUALIZATION_SIMILARITY
             ).order_by(NewsClusters.created_at.desc())
         )
         clusters = result.scalars().first()
@@ -256,12 +245,12 @@ async def get_news_clusters(
             cluster_data = clusters.clusters
         else:
             # If no pre-generated clusters, generate them now
-            cluster_data = await generate_clusters(db, hours, normalized_similarity)
+            cluster_data = await generate_clusters(db)
             
             # Store the newly generated clusters in the database
             new_clusters = NewsClusters(
-                hours=hours,
-                min_similarity=normalized_similarity,
+                hours=settings.VISUALIZATION_TIME_RANGE,
+                min_similarity=settings.VISUALIZATION_SIMILARITY,
                 clusters=cluster_data
             )
             db.add(new_clusters)

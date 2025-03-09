@@ -14,6 +14,9 @@
 <div class="row mb-4">
     <div class="col">
         <h1>Cluster</h1>
+        <div class="text-muted">
+            Time Range: {{ hours }} hours | Similarity Threshold: {{ min_similarity }}%
+        </div>
     </div>
 </div>
 
@@ -22,24 +25,6 @@
         <div id="clustersContainer">
             <!-- Clusters will be loaded here -->
         </div>
-    </div>
-</div>
-
-<div class="row mb-3">
-    <div class="col">
-        <form id="clusterForm" class="d-flex gap-3">
-            <div class="flex-grow-1">
-                <label for="hours" class="form-label">Time Range (hours)</label>
-                <input type="number" class="form-control" id="hours" name="hours" value="{{ hours }}" min="1" max="168">
-            </div>
-            <div class="flex-grow-1">
-                <label for="min_similarity" class="form-label">Minimum Similarity (%)</label>
-                <input type="number" class="form-control" id="min_similarity" name="min_similarity" value="{{ min_similarity }}" min="0" max="100">
-            </div>
-            <div class="align-self-end">
-                <button type="submit" class="btn btn-primary">Update Clusters</button>
-            </div>
-        </form>
     </div>
 </div>
 
@@ -95,7 +80,6 @@
 {% block extra_js %}
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    const clusterForm = document.getElementById('clusterForm');
     const clustersContainer = document.getElementById('clustersContainer');
     const clusterTemplate = document.getElementById('clusterTemplate');
     const centerArticleTemplate = document.getElementById('centerArticleTemplate');
@@ -103,37 +87,6 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Parse server data
     const serverData = JSON.parse(document.getElementById('serverData').textContent);
-
-    async function loadClusters() {
-        const hours = document.getElementById('hours').value;
-        const minSimilarity = document.getElementById('min_similarity').value / 100;
-
-        try {
-            // Show loading state
-            clustersContainer.innerHTML = '<div class="text-center"><div class="spinner-border" role="status"><span class="visually-hidden">Loading...</span></div></div>';
-
-            // Always use the API endpoint
-            const response = await fetch(`/api/news/clusters?hours=${hours}&min_similarity=${minSimilarity}`);
-            if (!response.ok) throw new Error('Failed to load clusters');
-            
-            const clusters = await response.json();
-            displayClusters(clusters);
-
-            // Update URL parameters without page reload
-            const url = new URL(window.location);
-            url.searchParams.set('hours', hours);
-            url.searchParams.set('min_similarity', minSimilarity);
-            window.history.pushState({}, '', url);
-            
-        } catch (error) {
-            console.error('Error loading clusters:', error);
-            clustersContainer.innerHTML = `
-                <div class="alert alert-danger">
-                    Failed to load news clusters. Please try again later.
-                </div>
-            `;
-        }
-    }
 
     function displayClusters(clusters) {
         clustersContainer.innerHTML = '';
@@ -185,11 +138,6 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
-    clusterForm.addEventListener('submit', function(e) {
-        e.preventDefault();
-        loadClusters();
-    });
-
     // Initialize with server data
     if (serverData.error) {
         clustersContainer.innerHTML = `
@@ -199,8 +147,6 @@ document.addEventListener('DOMContentLoaded', function() {
         `;
     } else if (serverData.clusters) {
         displayClusters(serverData.clusters);
-    } else {
-        loadClusters();
     }
 });
 </script>

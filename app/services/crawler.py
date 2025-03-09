@@ -10,10 +10,11 @@ from sqlalchemy.orm import sessionmaker
 
 from app.config import settings
 from app.models.url import URL, URLDatabase
-from app.models.news import NewsItem, NewsItemCreate  # Fixed import path
+from app.models.news import NewsItem, NewsItemCreate
 from app.services.extractor import ContentExtractor
 from app.services.embedding import EmbeddingService
 from app.services.redis_client import get_redis_client
+from app.services.visualization import update_visualizations
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -74,6 +75,11 @@ class Crawler:
                 await self._crawl_rss(url_item)
             else:
                 await self._crawl_homepage(url_item)
+            
+            # Update visualizations after crawling each URL
+            async with AsyncSessionLocal() as session:
+                await update_visualizations(session)
+                
         except Exception as e:
             logger.error(f"Error crawling {url_item.url}: {str(e)}")
 

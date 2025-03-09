@@ -14,24 +14,9 @@
 <div class="row mb-4">
     <div class="col">
         <h1>Visualization</h1>
-    </div>
-</div>
-
-<div class="row mb-3">
-    <div class="col">
-        <form id="umapForm" class="d-flex gap-3">
-            <div class="flex-grow-1">
-                <label for="hours" class="form-label">Time Range (hours)</label>
-                <input type="number" class="form-control" id="hours" name="hours" value="{{ hours }}" min="1" max="168">
-            </div>
-            <div class="flex-grow-1">
-                <label for="min_similarity" class="form-label">Minimum Similarity (%)</label>
-                <input type="number" class="form-control" id="min_similarity" name="min_similarity" value="{{ min_similarity }}" min="0" max="100">
-            </div>
-            <div class="align-self-end">
-                <button type="submit" class="btn btn-primary">Update Visualization</button>
-            </div>
-        </form>
+        <div class="text-muted">
+            Time Range: {{ hours }} hours | Similarity Threshold: {{ min_similarity }}%
+        </div>
     </div>
 </div>
 
@@ -59,61 +44,11 @@
 <script src="https://d3js.org/d3.v7.min.js"></script>
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    const umapForm = document.getElementById('umapForm');
     const tooltip = document.getElementById('tooltip');
     let svg;
     
     // Parse server data
     const serverData = JSON.parse(document.getElementById('serverData').textContent);
-
-    async function loadVisualization() {
-        const hours = document.getElementById('hours').value;
-        const minSimilarity = document.getElementById('min_similarity').value / 100;
-
-        try {
-            console.log(`Loading visualization with hours=${hours}, min_similarity=${minSimilarity}`);
-            
-            // Show loading indicator
-            document.getElementById('visualization').innerHTML = `
-                <div class="d-flex justify-content-center align-items-center" style="height: 100%">
-                    <div class="spinner-border text-primary" role="status">
-                        <span class="visually-hidden">Loading...</span>
-                    </div>
-                </div>
-            `;
-            
-            // Fetch data using AJAX instead of page reload
-            const response = await fetch(`/umap?hours=${hours}&min_similarity=${minSimilarity}`, {
-                headers: {
-                    'Accept': 'application/json'
-                }
-            });
-            
-            if (!response.ok) {
-                throw new Error('Failed to fetch visualization data');
-            }
-            
-            const data = await response.json();
-            if (data.error) {
-                throw new Error(data.error);
-            }
-            
-            // Update URL without reloading
-            const url = new URL(window.location);
-            url.searchParams.set('hours', hours);
-            url.searchParams.set('min_similarity', minSimilarity);
-            window.history.pushState({}, '', url);
-            
-            createVisualization(data.visualization);
-        } catch (error) {
-            console.error('Error loading visualization:', error);
-            document.getElementById('visualization').innerHTML = `
-                <div class="alert alert-danger">
-                    Failed to load visualization. Please try again later.
-                </div>
-            `;
-        }
-    }
 
     function createVisualization(data) {
         // Clear previous visualization
@@ -234,11 +169,6 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
-    umapForm.addEventListener('submit', function(e) {
-        e.preventDefault();
-        loadVisualization();
-    });
-
     // Initialize with server data
     if (serverData.error) {
         document.getElementById('visualization').innerHTML = `
@@ -248,8 +178,6 @@ document.addEventListener('DOMContentLoaded', function() {
         `;
     } else if (serverData.visualization) {
         createVisualization(serverData.visualization);
-    } else {
-        loadVisualization();
     }
 });
 </script>

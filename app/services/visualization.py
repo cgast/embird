@@ -6,23 +6,23 @@ import umap
 from sqlalchemy import select, text, update, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.news import NewsItem, NewsClusters, NewsUMAP  # Fixed import path
+from app.models.news import NewsItem, NewsClusters, NewsUMAP
 from app.services.redis_client import get_redis_client
+from app.config import settings
 
 logger = logging.getLogger(__name__)
 
-async def generate_clusters(
-    db: AsyncSession,
-    hours: int = 48,
-    min_similarity: float = 0.6  # Restored to 0.6
-) -> Dict[int, List[dict]]:
+async def generate_clusters(db: AsyncSession) -> Dict[int, List[dict]]:
     """Generate news clusters using Redis vector similarity."""
     try:
         # Get Redis client
         redis_client = await get_redis_client()
         
         # Generate clusters using Redis
-        clusters = await redis_client.get_clusters(hours, min_similarity)
+        clusters = await redis_client.get_clusters(
+            settings.VISUALIZATION_TIME_RANGE,
+            settings.VISUALIZATION_SIMILARITY
+        )
         
         if not clusters:
             logger.warning("No clusters found in Redis")
@@ -69,15 +69,11 @@ async def generate_clusters(
         logger.error(f"Clustering error: {str(e)}")
         raise
 
-async def generate_umap_visualization(
-    db: AsyncSession,
-    hours: int = 48,
-    min_similarity: float = 0.6  # Restored to 0.6
-) -> List[dict]:
+async def generate_umap_visualization(db: AsyncSession) -> List[dict]:
     """Generate UMAP visualization data for news items."""
     try:
         # First generate clusters to get cluster assignments
-        clusters = await generate_clusters(db, hours, min_similarity)
+        clusters = await generate_clusters(db)
         
         # Create a mapping of news item ID to cluster ID
         item_to_cluster = {}
@@ -86,8 +82,8 @@ async def generate_umap_visualization(
                 item_to_cluster[item['id']] = cluster_id
 
         # Get news items from the last n hours
-        time_filter = datetime.utcnow().replace(tzinfo=None)  # Ensure naive datetime for comparison
-        time_filter = time_filter - timedelta(hours=hours)
+        time_filter = datetime.utcnow().replace(tzinfo=None)
+        time_filter = time_filter - timedelta(hours=settings.VISUALIZATION_TIME_RANGE)
         
         # Get all news items with embeddings from the specified time period
         stmt = select(NewsItem).filter(
@@ -109,7 +105,7 @@ async def generate_umap_visualization(
         umap_result = reducer.fit_transform(embeddings)
         
         # Calculate time-based opacity
-        now = datetime.utcnow().replace(tzinfo=None)  # Ensure naive datetime
+        now = datetime.utcnow().replace(tzinfo=None)
         one_hour_ago = now - timedelta(hours=1)
         yesterday = now - timedelta(days=1)
         
@@ -139,8 +135,8 @@ async def generate_umap_visualization(
                 "last_seen_at": news_item.last_seen_at.isoformat() if news_item.last_seen_at else None,
                 "x": float(umap_result[i][0]),
                 "y": float(umap_result[i][1]),
-                "cluster_id": item_to_cluster.get(news_item.id),  # Add cluster ID
-                "opacity": opacity  # Add opacity
+                "cluster_id": item_to_cluster.get(news_item.id),
+                "opacity": opacity
             })
         
         return visualization_data
@@ -152,73 +148,65 @@ async def generate_umap_visualization(
 async def update_visualizations(db: AsyncSession):
     """Update all pre-generated visualizations."""
     try:
-        # Generate clusters for different time ranges and similarities
-        time_ranges = [48]  # 48 hours
-        similarities = [0.6]  # Restored to 0.6
+        # Generate UMAP visualization
+        umap_data = await generate_umap_visualization(db)
         
-        for hours in time_ranges:
-            # Generate UMAP visualization
-            umap_data = await generate_umap_visualization(db, hours, similarities[0])
-            
-            # For each similarity value, generate and store UMAP visualization
-            for min_similarity in similarities:
-                # Check if UMAP visualization exists
-                stmt = select(NewsUMAP).filter(
-                    NewsUMAP.hours == hours,
-                    NewsUMAP.min_similarity == min_similarity
-                )
-                result = await db.execute(stmt)
-                existing_umap = result.scalar_one_or_none()
-                
-                if existing_umap:
-                    # Update existing visualization
-                    stmt = update(NewsUMAP).where(
-                        NewsUMAP.hours == hours,
-                        NewsUMAP.min_similarity == min_similarity
-                    ).values(
-                        visualization=umap_data,
-                        created_at=func.now()
-                    )
-                    await db.execute(stmt)
-                else:
-                    # Create new visualization
-                    umap_viz = NewsUMAP(
-                        hours=hours,
-                        min_similarity=min_similarity,
-                        visualization=umap_data
-                    )
-                    db.add(umap_viz)
-            
-            # Generate and store clusters for different similarities
-            for min_similarity in similarities:
-                clusters_data = await generate_clusters(db, hours, min_similarity)
-                
-                # Check if clusters exist
-                stmt = select(NewsClusters).filter(
-                    NewsClusters.hours == hours,
-                    NewsClusters.min_similarity == min_similarity
-                )
-                result = await db.execute(stmt)
-                existing_clusters = result.scalar_one_or_none()
-                
-                if existing_clusters:
-                    # Update existing clusters
-                    stmt = update(NewsClusters).where(
-                        NewsClusters.hours == hours,
-                        NewsClusters.min_similarity == min_similarity
-                    ).values(
-                        clusters=clusters_data,
-                        created_at=func.now()
-                    )
-                    await db.execute(stmt)
-                else:
-                    # Create new clusters
-                    clusters = NewsClusters(
-                        hours=hours,
-                        min_similarity=min_similarity,
-                        clusters=clusters_data
-                    )
-                    db.add(clusters)
+        # Check if UMAP visualization exists
+        stmt = select(NewsUMAP).filter(
+            NewsUMAP.hours == settings.VISUALIZATION_TIME_RANGE,
+            NewsUMAP.min_similarity == settings.VISUALIZATION_SIMILARITY
+        )
+        result = await db.execute(stmt)
+        existing_umap = result.scalar_one_or_none()
+        
+        if existing_umap:
+            # Update existing visualization
+            stmt = update(NewsUMAP).where(
+                NewsUMAP.hours == settings.VISUALIZATION_TIME_RANGE,
+                NewsUMAP.min_similarity == settings.VISUALIZATION_SIMILARITY
+            ).values(
+                visualization=umap_data,
+                created_at=func.now()
+            )
+            await db.execute(stmt)
+        else:
+            # Create new visualization
+            umap_viz = NewsUMAP(
+                hours=settings.VISUALIZATION_TIME_RANGE,
+                min_similarity=settings.VISUALIZATION_SIMILARITY,
+                visualization=umap_data
+            )
+            db.add(umap_viz)
+        
+        # Generate and store clusters
+        clusters_data = await generate_clusters(db)
+        
+        # Check if clusters exist
+        stmt = select(NewsClusters).filter(
+            NewsClusters.hours == settings.VISUALIZATION_TIME_RANGE,
+            NewsClusters.min_similarity == settings.VISUALIZATION_SIMILARITY
+        )
+        result = await db.execute(stmt)
+        existing_clusters = result.scalar_one_or_none()
+        
+        if existing_clusters:
+            # Update existing clusters
+            stmt = update(NewsClusters).where(
+                NewsClusters.hours == settings.VISUALIZATION_TIME_RANGE,
+                NewsClusters.min_similarity == settings.VISUALIZATION_SIMILARITY
+            ).values(
+                clusters=clusters_data,
+                created_at=func.now()
+            )
+            await db.execute(stmt)
+        else:
+            # Create new clusters
+            clusters = NewsClusters(
+                hours=settings.VISUALIZATION_TIME_RANGE,
+                min_similarity=settings.VISUALIZATION_SIMILARITY,
+                clusters=clusters_data
+            )
+            db.add(clusters)
         
         await db.commit()
         logger.info("Successfully updated all visualizations")

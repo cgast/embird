@@ -36,6 +36,10 @@ class Settings(BaseSettings):
     
     # Vector dimensions
     VECTOR_DIMENSIONS: int = 1024  # Cohere embed-english-v3.0
+
+    # Visualization Settings
+    VISUALIZATION_TIME_RANGE: int = int(os.environ.get("VISUALIZATION_TIME_RANGE", 48))  # hours
+    VISUALIZATION_SIMILARITY: float = float(os.environ.get("VISUALIZATION_SIMILARITY", 0.6))  # similarity threshold
     
     # Ensure SQLite directory exists
     def __init__(self, **data):

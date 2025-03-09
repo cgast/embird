@@ -8,9 +8,10 @@ import time
 from datetime import datetime
 
 from app.models.url import URL, URLCreate, URLDatabase
-from app.models.news import NewsItem, NewsClusters, NewsUMAP  # Fixed import path
+from app.models.news import NewsItem, NewsClusters, NewsUMAP
 from app.services.db import get_db, url_db
 from app.services.visualization import generate_clusters, generate_umap_visualization
+from app.config import settings
 
 # Configure logging
 import logging
@@ -219,24 +220,22 @@ async def search_form(request: Request):
 @router.get("/clusters", response_class=HTMLResponse)
 async def view_clusters(
     request: Request,
-    db: AsyncSession = Depends(get_db),
-    hours: int = Query(48, ge=1, le=168),
-    min_similarity: float = Query(0.6, ge=0.0, le=1.0)
+    db: AsyncSession = Depends(get_db)
 ):
     """Render the news clusters page."""
     try:
         # Try to get pre-generated clusters
         result = await db.execute(
             select(NewsClusters).filter(
-                NewsClusters.hours == hours,
-                NewsClusters.min_similarity == min_similarity
+                NewsClusters.hours == settings.VISUALIZATION_TIME_RANGE,
+                NewsClusters.min_similarity == settings.VISUALIZATION_SIMILARITY
             ).order_by(NewsClusters.created_at.desc())
         )
         clusters = result.scalars().first()
         
         # If no pre-generated clusters found, generate them
         if not clusters:
-            clusters_data = await generate_clusters(db, hours, min_similarity)
+            clusters_data = await generate_clusters(db)
         else:
             clusters_data = clusters.clusters
             
@@ -305,8 +304,8 @@ async def view_clusters(
             {
                 "request": request,
                 "initial_clusters": serializable_clusters,
-                "hours": hours,
-                "min_similarity": min_similarity * 100  # Convert to percentage for display
+                "hours": settings.VISUALIZATION_TIME_RANGE,
+                "min_similarity": settings.VISUALIZATION_SIMILARITY * 100  # Convert to percentage for display
             }
         )
     except Exception as e:
@@ -322,19 +321,18 @@ async def view_clusters(
 @router.get("/umap")
 async def view_umap(
     request: Request,
-    db: AsyncSession = Depends(get_db),
-    hours: int = Query(48, ge=1, le=168),
-    min_similarity: float = Query(0.6, ge=0.0, le=1.0)
+    db: AsyncSession = Depends(get_db)
 ):
     """Render the UMAP visualization page."""
     try:
         start_time = time.time()
-        logger.info(f"Generating UMAP visualization with hours={hours}, min_similarity={min_similarity}")
+        logger.info("Generating UMAP visualization using settings")
         
         # Try to get pre-generated visualization
         result = await db.execute(
             select(NewsUMAP).filter(
-                NewsUMAP.hours == hours
+                NewsUMAP.hours == settings.VISUALIZATION_TIME_RANGE,
+                NewsUMAP.min_similarity == settings.VISUALIZATION_SIMILARITY
             ).order_by(NewsUMAP.created_at.desc())
         )
         umap_data = result.scalars().first()
@@ -342,7 +340,7 @@ async def view_umap(
         # If no pre-generated visualization found, generate it
         if not umap_data:
             logger.info("No pre-generated UMAP data found, generating new visualization")
-            visualization_data = await generate_umap_visualization(db, hours, min_similarity)
+            visualization_data = await generate_umap_visualization(db)
         else:
             logger.info(f"Using pre-generated UMAP data from {umap_data.created_at}")
             visualization_data = umap_data.visualization
@@ -354,8 +352,8 @@ async def view_umap(
         if "application/json" in accept:
             return JSONResponse({
                 "visualization": visualization_data,
-                "hours": hours,
-                "min_similarity": min_similarity * 100
+                "hours": settings.VISUALIZATION_TIME_RANGE,
+                "min_similarity": settings.VISUALIZATION_SIMILARITY * 100
             })
         
         # Otherwise return HTML
@@ -364,8 +362,8 @@ async def view_umap(
             {
                 "request": request,
                 "initial_visualization": visualization_data,
-                "hours": hours,
-                "min_similarity": min_similarity * 100  # Convert to percentage for display
+                "hours": settings.VISUALIZATION_TIME_RANGE,
+                "min_similarity": settings.VISUALIZATION_SIMILARITY * 100  # Convert to percentage for display
             }
         )
     except Exception as e:
