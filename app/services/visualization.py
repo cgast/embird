@@ -6,7 +6,7 @@ import umap
 from sqlalchemy import select, text, update, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from shared.models.news import NewsItem, NewsClusters, NewsUMAP  # Updated import
+from app.models.news import NewsItem, NewsClusters, NewsUMAP  # Fixed import path
 from app.services.redis_client import get_redis_client
 
 logger = logging.getLogger(__name__)

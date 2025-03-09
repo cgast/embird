@@ -10,7 +10,7 @@ from sqlalchemy.orm import sessionmaker
 
 from app.config import settings
 from app.models.url import URL, URLDatabase
-from shared.models.news import NewsItem, NewsItemCreate  # Updated import
+from app.models.news import NewsItem, NewsItemCreate  # Fixed import path
 from app.services.extractor import ContentExtractor
 from app.services.embedding import EmbeddingService
 from app.services.redis_client import get_redis_client

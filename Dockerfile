@@ -23,17 +23,16 @@ RUN mkdir -p /app/data && \
 
 # Copy application code
 COPY app /app/app
-COPY shared /app/shared
+
+# Copy and set permissions on entrypoint script before switching user
+COPY entrypoint.sh /app/
+RUN chmod +x /app/entrypoint.sh
 
 USER appuser
 
 # Set environment variable for service type (default to webapp)
 ENV SERVICE_TYPE=webapp
 ENV PORT=8000
-
-# Use entrypoint script to determine which service to run
-COPY entrypoint.sh /app/
-RUN chmod +x /app/entrypoint.sh
 
 EXPOSE 8000
 

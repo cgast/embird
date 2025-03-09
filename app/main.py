@@ -12,11 +12,12 @@ from sqlalchemy import select, update, func
 
 from app.config import settings
 from app.routes import api, web
-from app.services.db import init_db, get_db
+from app.services.db import init_db, get_db_context
 from app.services.crawler import Crawler
 from app.models.url import URLDatabase
 from app.services.visualization import generate_clusters
-from shared.models.news import NewsClusters
+from app.services.embedding import start_background_tasks, stop_background_tasks
+from app.models.news import NewsClusters  # Fixed import path
 
 # Configure logging
 logging.basicConfig(
@@ -97,7 +98,7 @@ async def crawl_all_urls():
     
     logger.info("Crawl job completed")
     
-    async with get_db() as db:
+    async with get_db_context() as db:
         await update_clusters(db)
 
 async def crawler_main():
@@ -138,12 +139,19 @@ app.include_router(web.router)
 
 @app.on_event("startup")
 async def startup_db_client():
-    """Initialize database on startup."""
+    """Initialize database and start background tasks on startup."""
     await init_db()
     
     # Start crawler if running in crawler mode
     if os.getenv("SERVICE_TYPE") == "crawler":
         asyncio.create_task(crawler_main())
+        # Start embedding service background tasks
+        asyncio.create_task(start_background_tasks())
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    """Stop background tasks on shutdown."""
+    await stop_background_tasks()
 
 @app.get("/health")
 async def health_check():

@@ -13,7 +13,7 @@ import numpy as np
 import umap
 
 from app.models.url import URL, URLCreate, URLDatabase
-from shared.models.news import (  # Updated import
+from app.models.news import (  # Updated import path
     NewsItem, NewsItemResponse, NewsItemSimilarity,
     NewsClusters, NewsUMAP,
     NewsClustersResponse, NewsUMAPResponse

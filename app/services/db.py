@@ -30,10 +30,22 @@ async def init_db():
         await conn.run_sync(NewsBase.metadata.create_all)
 
 @asynccontextmanager
-async def get_db():
-    """Get database session."""
+async def get_db_context():
+    """Context manager for database sessions."""
     async with AsyncSessionLocal() as session:
         try:
             yield session
+        finally:
+            await session.close()
+
+async def get_db():
+    """FastAPI dependency for database sessions."""
+    async with AsyncSessionLocal() as session:
+        try:
+            yield session
+            await session.commit()
+        except:
+            await session.rollback()
+            raise
         finally:
             await session.close()

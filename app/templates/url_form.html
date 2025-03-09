@@ -8,13 +8,78 @@
         <h1>Manage URLs</h1>
         <p class="lead">Manage the URLs that the crawler will monitor for news.</p>
     </div>
-    <div class="col-auto">
-        <a href="/urls/add" class="btn btn-primary">Add New URL</a>
+</div>
+
+{% if mode == 'add' %}
+<!-- Add URL Form -->
+<div class="card">
+    <div class="card-body">
+        {% if error %}
+        <div class="alert alert-danger">
+            {{ error }}
+        </div>
+        {% endif %}
+        
+        <form method="POST" action="/urls/add">
+            <div class="mb-3">
+                <label for="url" class="form-label">URL</label>
+                <input type="url" class="form-control" id="url" name="url" required 
+                       placeholder="https://example.com/feed.xml">
+                <div class="form-text">Enter the full URL including http:// or https://</div>
+            </div>
+            
+            <div class="mb-3">
+                <label for="type" class="form-label">Type</label>
+                <select class="form-select" id="type" name="type" required>
+                    <option value="rss">RSS Feed</option>
+                    <option value="html">HTML Page</option>
+                </select>
+                <div class="form-text">Select the type of content at this URL</div>
+            </div>
+            
+            <div class="d-flex justify-content-between">
+                <a href="/urls" class="btn btn-outline-secondary">Cancel</a>
+                <button type="submit" class="btn btn-primary">Add URL</button>
+            </div>
+        </form>
     </div>
 </div>
 
+{% elif mode == 'delete' %}
+<!-- Delete URL Confirmation -->
+<div class="row">
+    <div class="col-md-8 offset-md-2">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">Are you sure you want to delete this URL?</h5>
+                
+                <div class="alert alert-warning">
+                    <p><strong>URL:</strong> {{ url.url }}</p>
+                    <p><strong>Type:</strong> {{ url.type }}</p>
+                    <p><strong>Added:</strong> {{ url.created_at.strftime('%Y-%m-%d %H:%M') }}</p>
+                </div>
+                
+                <p>This action cannot be undone.</p>
+                
+                <form method="post" action="/urls/{{ url.id }}/delete">
+                    <div class="d-grid gap-2">
+                        <button type="submit" class="btn btn-danger">Yes, Delete URL</button>
+                        <a href="/urls" class="btn btn-outline-secondary">Cancel</a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% else %}
+<!-- List URLs -->
 <div class="card">
     <div class="card-body">
+        <div class="mb-3">
+            <a href="/urls/add" class="btn btn-primary">Add New URL</a>
+        </div>
+
         {% if urls %}
         <div class="table-responsive">
             <table class="table table-hover">
@@ -60,4 +125,5 @@
         {% endif %}
     </div>
 </div>
+{% endif %}
 {% endblock %}

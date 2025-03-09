@@ -224,9 +224,9 @@ class RedisClient:
             # Build KNN search query
             try:
                 print("REDIS DEBUG: Attempting KNN search")
-                query = f"*=>[KNN {limit} @embedding $vec AS score]"
+                query = f"*=>[KNN {limit} @embedding $vec]"  # Removed "AS score"
                 if min_timestamp is not None:
-                    query = f"@timestamp:[{min_timestamp} +inf]=>[KNN {limit} @embedding $vec AS score]"
+                    query = f"@timestamp:[{min_timestamp} +inf]=>[KNN {limit} @embedding $vec]"  # Removed "AS score"
                 
                 params = {"vec": query_bytes}
                 

@@ -1,57 +1,82 @@
-news-crawler/
-├── .env.example
-├── .gitignore
-├── README.md
-├── docker-compose.yml
-├── init-scripts/
-│   └── init.sql
-├── webapp/
-│   ├── Dockerfile
-│   ├── app/
-│   │   ├── __init__.py
-│   │   ├── main.py
-│   │   ├── config.py
-│   │   ├── models/
-│   │   │   ├── __init__.py
-│   │   │   ├── url.py
-│   │   │   └── news.py
-│   │   ├── services/
-│   │   │   ├── __init__.py
-│   │   │   ├── embedding.py
-│   │   │   └── db.py
-│   │   ├── routes/
-│   │   │   ├── __init__.py
-│   │   │   ├── api.py
-│   │   │   └── web.py
-│   │   ├── templates/
-│   │   │   ├── base.html
-│   │   │   ├── index.html
-│   │   │   ├── url_form.html
-│   │   │   ├── url_list.html
-│   │   │   └── news_list.html
-│   │   └── static/
-│   │       ├── css/
-│   │       │   └── style.css
-│   │       └── js/
-│   │           └── main.js
-│   └── requirements.txt
-└── crawler/
-    ├── Dockerfile
-    ├── app/
+news-suck/
+├── .env.example             # Environment variables template
+├── .gitignore              # Git ignore rules
+├── README.md               # Project documentation
+├── setup.py                # Shared package configuration
+├── requirements.txt        # Application dependencies
+├── docker-compose.yml      # Container orchestration
+├── Dockerfile             # Application container definition
+├── entrypoint.sh          # Container entry point script
+├── start.sh               # Deployment script
+│
+├── init-scripts/          # Database initialization
+│   └── init.sql          # Initial database schema
+│
+└── app/
+    ├── main.py            # Application entry point
+    ├── config.py          # Configuration management
+    │
+    ├── models/            # Database models
     │   ├── __init__.py
-    │   ├── main.py
-    │   ├── config.py
-    │   ├── models/
-    │   │   ├── __init__.py
-    │   │   ├── url.py
-    │   │   └── news.py
-    │   ├── services/
-    │   │   ├── __init__.py
-    │   │   ├── crawler.py
-    │   │   ├── embedding.py
-    │   │   ├── extractor.py
-    │   │   └── db.py
-    │   └── utils/
-    │       ├── __init__.py
-    │       └── helpers.py
-    └── requirements.txt
+    │   ├── news.py        # News article model
+    │   └── url.py         # URL source model
+    │
+    ├── services/          # Core business logic
+    │   ├── __init__.py
+    │   ├── crawler.py     # News crawling service
+    │   ├── db.py         # Database operations
+    │   ├── embedding.py   # Text embedding service (TO-DO: Merge with embedding_worker.py)
+    │   ├── embedding_worker.py  # Background embedding worker (TO-DO: Merge into embedding.py)
+    │   ├── extractor.py   # Content extraction
+    │   ├── redis_client.py # Redis operations
+    │   └── visualization.py # Data visualization
+    │
+    ├── routes/            # API endpoints
+    │   ├── __init__.py
+    │   ├── api.py        # REST API routes
+    │   └── web.py        # Web UI routes
+    │
+    ├── static/            # Static assets
+    │   ├── css/
+    │   │   └── style.css
+    │   └── js/
+    │       └── main.js
+    │
+    ├── templates/         # Jinja2 templates
+    │   ├── base.html     # Base template
+    │   ├── index.html    # Home page
+    │   ├── news_clusters.html
+    │   ├── news_detail.html
+    │   ├── news_list.html
+    │   ├── news_umap.html
+    │   ├── search.html
+    │   ├── url_add.html   # (TO-DO: Consolidate into url_form.html)
+    │   ├── url_delete.html # (TO-DO: Consolidate into url_form.html)
+    │   └── url_form.html  # URL management
+    │
+    └── utils/            # Helper functions
+        ├── __init__.py
+        └── helpers.py
+
+Recommended Changes:
+1. Service Consolidation:
+   - Merge embedding_worker.py functionality into embedding.py
+   - Consider using async background tasks or Celery for worker functionality
+
+2. Template Consolidation:
+   - Merge url_add.html and url_delete.html into url_form.html
+   - Update routes/web.py to use consolidated template
+
+3. Deployment:
+   - Maintain start.sh for deployment automation
+   - Consider documenting deployment process in README.md
+
+Current Structure Status:
+✓ Basic directory organization
+✓ Core service separation
+✓ Route organization
+✓ Static assets structure
+! Template consolidation needed
+! Service worker consolidation needed
+
+This structure represents the current state of the project with noted areas for improvement. The TO-DO items indicate where consolidation would reduce redundancy while maintaining functionality.

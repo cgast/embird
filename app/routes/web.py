@@ -8,10 +8,9 @@ import time
 from datetime import datetime
 
 from app.models.url import URL, URLCreate, URLDatabase
-from shared.models.news import NewsItem, NewsClusters, NewsUMAP  # Updated import
+from app.models.news import NewsItem, NewsClusters, NewsUMAP  # Fixed import path
 from app.services.db import get_db, url_db
 from app.services.visualization import generate_clusters, generate_umap_visualization
-
 
 # Configure logging
 import logging
@@ -63,15 +62,22 @@ async def list_urls(request: Request):
     urls = url_db.get_all_urls()
     return request.state.templates.TemplateResponse(
         "url_form.html",
-        {"request": request, "urls": urls}
+        {
+            "request": request,
+            "urls": urls,
+            "mode": "list"
+        }
     )
 
 @router.get("/urls/add", response_class=HTMLResponse)
 async def add_url_form(request: Request):
     """Render the add URL form."""
     return request.state.templates.TemplateResponse(
-        "url_add.html",
-        {"request": request}
+        "url_form.html",
+        {
+            "request": request,
+            "mode": "add"
+        }
     )
 
 @router.post("/urls/add")
@@ -87,8 +93,12 @@ async def add_url(
         return RedirectResponse(url="/urls", status_code=303)
     except Exception as e:
         return request.state.templates.TemplateResponse(
-            "url_add.html",
-            {"request": request, "error": str(e)}
+            "url_form.html",
+            {
+                "request": request,
+                "error": str(e),
+                "mode": "add"
+            }
         )
 
 @router.get("/urls/{url_id}/delete")
@@ -99,8 +109,12 @@ async def delete_url_confirm(request: Request, url_id: int):
         raise HTTPException(status_code=404, detail="URL not found")
     
     return request.state.templates.TemplateResponse(
-        "url_delete.html",
-        {"request": request, "url": url}
+        "url_form.html",
+        {
+            "request": request,
+            "url": url,
+            "mode": "delete"
+        }
     )
 
 @router.post("/urls/{url_id}/delete")
@@ -207,7 +221,7 @@ async def view_clusters(
     request: Request,
     db: AsyncSession = Depends(get_db),
     hours: int = Query(48, ge=1, le=168),
-    min_similarity: float = Query(0.6, ge=0.0, le=1.0)  # Restored to 0.6
+    min_similarity: float = Query(0.6, ge=0.0, le=1.0)
 ):
     """Render the news clusters page."""
     try:
