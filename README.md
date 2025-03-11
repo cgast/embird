@@ -48,7 +48,7 @@ The system uses FAISS (Facebook AI Similarity Search) for efficient vector opera
 
 ```bash
 git clone https://github.com/cgast/news-suck.git
-cd news-suck
+cd news-suckr
 ```
 
 #### Create a `.env` file with your Cohere API key
@@ -78,7 +78,7 @@ docker-compose up -d
 
 ### Project Structure
 
-```text
+```
 app/
 ├── models/          # Database models
 ├── routes/          # API and web routes
@@ -129,6 +129,10 @@ Configuration options can be set via environment variables:
 - `NEWS_RETENTION_DAYS`: Number of days to keep news items (default: 30)
 - `NEWS_MAX_ITEMS`: Maximum number of news items to keep (default: 10000)
 - `VECTOR_DIMENSIONS`: Dimension of embedding vectors (default: 1024)
+- `VISUALIZATION_TIME_RANGE`: Hours of news to include in visualizations (default: 48)
+- `VISUALIZATION_SIMILARITY`: Similarity threshold for clustering (default: 0.55)
+- `FAISS_UPDATE_INTERVAL`: Interval between FAISS index updates in seconds (default: 3600)
+- `FAISS_MAX_VECTORS`: Maximum number of vectors to keep in FAISS index (default: 10000)
 - `DEBUG`: Enable debug mode (default: False)
 
 ## License
