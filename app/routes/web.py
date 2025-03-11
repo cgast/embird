@@ -53,31 +53,38 @@ async def index(request: Request, db: AsyncSession = Depends(get_db)):
             "news_items": news_items,
             "trending_news": trending_news,
             "urls": urls,
-            "total_news": total_news
+            "total_news": total_news,
+            "enable_url_management": settings.ENABLE_URL_MANAGEMENT
         }
     )
 
 @router.get("/urls", response_class=HTMLResponse)
 async def list_urls(request: Request):
     """Render the URLs page."""
+    if not settings.ENABLE_URL_MANAGEMENT:
+        raise HTTPException(status_code=403, detail="URL management is disabled")
     urls = url_db.get_all_urls()
     return request.state.templates.TemplateResponse(
         "url_form.html",
         {
             "request": request,
             "urls": urls,
-            "mode": "list"
+            "mode": "list",
+            "enable_url_management": settings.ENABLE_URL_MANAGEMENT
         }
     )
 
 @router.get("/urls/add", response_class=HTMLResponse)
 async def add_url_form(request: Request):
     """Render the add URL form."""
+    if not settings.ENABLE_URL_MANAGEMENT:
+        raise HTTPException(status_code=403, detail="URL management is disabled")
     return request.state.templates.TemplateResponse(
         "url_form.html",
         {
             "request": request,
-            "mode": "add"
+            "mode": "add",
+            "enable_url_management": settings.ENABLE_URL_MANAGEMENT
         }
     )
 
@@ -88,6 +95,8 @@ async def add_url(
     type: str = Form(...)
 ):
     """Handle URL form submission."""
+    if not settings.ENABLE_URL_MANAGEMENT:
+        raise HTTPException(status_code=403, detail="URL management is disabled")
     try:
         url_create = URLCreate(url=url, type=type)
         url_db.add_url(url_create)
@@ -98,13 +107,16 @@ async def add_url(
             {
                 "request": request,
                 "error": str(e),
-                "mode": "add"
+                "mode": "add",
+                "enable_url_management": settings.ENABLE_URL_MANAGEMENT
             }
         )
 
 @router.get("/urls/{url_id}/delete")
 async def delete_url_confirm(request: Request, url_id: int):
     """Render delete URL confirmation page."""
+    if not settings.ENABLE_URL_MANAGEMENT:
+        raise HTTPException(status_code=403, detail="URL management is disabled")
     url = url_db.get_url_by_id(url_id)
     if not url:
         raise HTTPException(status_code=404, detail="URL not found")
@@ -114,13 +126,16 @@ async def delete_url_confirm(request: Request, url_id: int):
         {
             "request": request,
             "url": url,
-            "mode": "delete"
+            "mode": "delete",
+            "enable_url_management": settings.ENABLE_URL_MANAGEMENT
         }
     )
 
 @router.post("/urls/{url_id}/delete")
 async def delete_url_handle(url_id: int):
     """Handle URL deletion."""
+    if not settings.ENABLE_URL_MANAGEMENT:
+        raise HTTPException(status_code=403, detail="URL management is disabled")
     success = url_db.delete_url(url_id)
     if not success:
         raise HTTPException(status_code=404, detail="URL not found")
@@ -172,7 +187,8 @@ async def list_news(
             "current_source": source_url,
             "page": page,
             "total_pages": total_pages,
-            "total_items": total_items
+            "total_items": total_items,
+            "enable_url_management": settings.ENABLE_URL_MANAGEMENT
         }
     )
 
@@ -205,7 +221,8 @@ async def view_news_item(
         {
             "request": request,
             "news_item": news_item,
-            "related_items": related_items
+            "related_items": related_items,
+            "enable_url_management": settings.ENABLE_URL_MANAGEMENT
         }
     )
 
@@ -214,7 +231,10 @@ async def search_form(request: Request):
     """Render the search form."""
     return request.state.templates.TemplateResponse(
         "search.html",
-        {"request": request}
+        {
+            "request": request,
+            "enable_url_management": settings.ENABLE_URL_MANAGEMENT
+        }
     )
 
 @router.get("/clusters", response_class=HTMLResponse)
@@ -273,7 +293,8 @@ async def view_clusters(
                 "request": request,
                 "initial_clusters": serializable_clusters,
                 "hours": settings.VISUALIZATION_TIME_RANGE,
-                "min_similarity": settings.VISUALIZATION_SIMILARITY * 100  # Convert to percentage for display
+                "min_similarity": settings.VISUALIZATION_SIMILARITY * 100,  # Convert to percentage for display
+                "enable_url_management": settings.ENABLE_URL_MANAGEMENT
             }
         )
     except Exception as e:
@@ -282,7 +303,8 @@ async def view_clusters(
             "news_clusters.html",
             {
                 "request": request,
-                "error": "Failed to load clusters. Please try again later."
+                "error": "Failed to load clusters. Please try again later.",
+                "enable_url_management": settings.ENABLE_URL_MANAGEMENT
             }
         )
 
@@ -325,7 +347,8 @@ async def view_umap(
             return JSONResponse({
                 "visualization": visualization_data,
                 "hours": settings.VISUALIZATION_TIME_RANGE,
-                "min_similarity": settings.VISUALIZATION_SIMILARITY * 100
+                "min_similarity": settings.VISUALIZATION_SIMILARITY * 100,
+                "enable_url_management": settings.ENABLE_URL_MANAGEMENT
             })
         
         # Otherwise return HTML
@@ -335,7 +358,8 @@ async def view_umap(
                 "request": request,
                 "initial_visualization": visualization_data,
                 "hours": settings.VISUALIZATION_TIME_RANGE,
-                "min_similarity": settings.VISUALIZATION_SIMILARITY * 100  # Convert to percentage for display
+                "min_similarity": settings.VISUALIZATION_SIMILARITY * 100,  # Convert to percentage for display
+                "enable_url_management": settings.ENABLE_URL_MANAGEMENT
             }
         )
     except Exception as e:
@@ -351,6 +375,7 @@ async def view_umap(
             "news_umap.html",
             {
                 "request": request,
-                "error": error_msg
+                "error": error_msg,
+                "enable_url_management": settings.ENABLE_URL_MANAGEMENT
             }
         )

@@ -52,7 +52,11 @@
             {% if current_source %}
             No news found from this source yet.
             {% else %}
-            No news items available yet. Add some URLs to crawl.
+                {% if enable_url_management %}
+                No news items available yet. Add some URLs to crawl.
+                {% else %}
+                No news items available yet. Contact the administrator to add news sources.
+                {% endif %}
             {% endif %}
         </p>
         {% endif %}

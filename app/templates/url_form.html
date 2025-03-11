@@ -10,7 +10,11 @@
     </div>
 </div>
 
-{% if mode == 'add' %}
+{% if not enable_url_management %}
+<div class="alert alert-warning">
+    URL management is currently disabled. Contact the administrator to enable this feature.
+</div>
+{% elif mode == 'add' %}
 <!-- Add URL Form -->
 <div class="card">
     <div class="card-body">
@@ -76,9 +80,11 @@
 <!-- List URLs -->
 <div class="card">
     <div class="card-body">
+        {% if enable_url_management %}
         <div class="mb-3">
             <a href="/urls/add" class="btn btn-primary">Add New URL</a>
         </div>
+        {% endif %}
 
         {% if urls %}
         <div class="table-responsive">
@@ -111,7 +117,9 @@
                         </td>
                         <td>
                             <a href="/news?source_url={{ url.url }}" class="btn btn-sm btn-outline-primary">View News</a>
+                            {% if enable_url_management %}
                             <a href="/urls/{{ url.id }}/delete" class="btn btn-sm btn-outline-danger">Delete</a>
+                            {% endif %}
                         </td>
                     </tr>
                     {% endfor %}
