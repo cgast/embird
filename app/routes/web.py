@@ -36,10 +36,9 @@ async def index(request: Request, db: AsyncSession = Depends(get_db)):
     
     # Get all preference vectors from PostgreSQL if enabled
     preference_vectors = []
-    if settings.ENABLE_PREFERENCE_MANAGEMENT:
-        query = select(PreferenceVector).filter(PreferenceVector.embedding.is_not(None))
-        result = await db.execute(query)
-        preference_vectors = result.scalars().all()
+    query = select(PreferenceVector).filter(PreferenceVector.embedding.is_not(None))
+    result = await db.execute(query)
+    preference_vectors = result.scalars().all()
     
     # Calculate proximity scores for each news item
     scored_items = []
