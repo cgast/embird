@@ -132,3 +132,19 @@ BEGIN
         ALTER TABLE news_umap ADD CONSTRAINT uix_umap_hours_similarity UNIQUE (hours, min_similarity);
     END IF;
 END $$;
+
+-- Create preference vectors table
+CREATE TABLE IF NOT EXISTS preference_vectors (
+    id SERIAL PRIMARY KEY,
+    title TEXT NOT NULL,
+    description TEXT NOT NULL,
+    embedding vector(1024),
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+);
+
+-- Create unique index on title to prevent duplicates
+CREATE UNIQUE INDEX IF NOT EXISTS preference_vectors_title_idx ON preference_vectors(title);
+
+-- Create vector index for similarity search
+CREATE INDEX IF NOT EXISTS preference_vectors_embedding_idx ON preference_vectors USING ivfflat (embedding vector_cosine_ops) WITH (lists = 100);

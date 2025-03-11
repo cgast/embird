@@ -5,12 +5,16 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, text
 from typing import List, Optional, Dict
 import time
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
+import numpy as np
 
 from app.models.url import URL, URLCreate, URLDatabase
 from app.models.news import NewsItem, NewsClusters, NewsUMAP
+from app.models.preference_vector import PreferenceVector, PreferenceVectorCreate, PreferenceVectorResponse
 from app.services.db import get_db, url_db
-from app.services.visualization import generate_clusters, generate_umap_visualization
+from app.services.visualization import generate_clusters, generate_umap_visualization, update_visualizations
+from app.services.embedding import get_embedding_service
+from app.services.faiss_service import get_faiss_service
 from app.config import settings
 
 # Configure logging
@@ -21,22 +25,76 @@ router = APIRouter()
 @router.get("/", response_class=HTMLResponse)
 async def index(request: Request, db: AsyncSession = Depends(get_db)):
     """Render the home page."""
-    # Get latest news items
-    query = select(NewsItem).order_by(NewsItem.last_seen_at.desc()).limit(10)
+    # Get news items from last 24 hours
+    time_filter = datetime.now(timezone.utc) - timedelta(hours=24)
+    query = select(NewsItem).filter(
+        NewsItem.last_seen_at >= time_filter,
+        NewsItem.embedding.isnot(None)  # Use isnot(None) for proper NULL check
+    ).order_by(NewsItem.last_seen_at.desc())
     result = await db.execute(query)
     news_items = result.scalars().all()
     
-    # Get trending news items
-    time_filter = func.now() - text("interval '24 hours'")
-    trending_query = select(NewsItem).filter(
-        NewsItem.last_seen_at >= time_filter
-    ).order_by(
-        NewsItem.hit_count.desc(),
-        NewsItem.last_seen_at.desc()
-    ).limit(5)
+    # Get all preference vectors from PostgreSQL
+    query = select(PreferenceVector).filter(PreferenceVector.embedding.is_not(None))
+    result = await db.execute(query)
+    preference_vectors = result.scalars().all()
     
-    trending_result = await db.execute(trending_query)
-    trending_news = trending_result.scalars().all()
+    # Calculate proximity scores for each news item
+    scored_items = []
+    
+    for item in news_items:
+        try:
+            # Skip if no embedding
+            if item.embedding is None:
+                continue
+                
+            # Calculate similarity to each preference vector
+            vector_scores = []
+            total_score = 0
+            
+            for pv in preference_vectors:
+                if pv.embedding is None:
+                    continue
+                    
+                # Calculate cosine similarity
+                news_vector = np.array(item.embedding.tolist(), dtype=np.float32)
+                pv_vector = np.array(pv.embedding.tolist(), dtype=np.float32)
+                
+                # Normalize vectors
+                news_norm = np.linalg.norm(news_vector)
+                pv_norm = np.linalg.norm(pv_vector)
+                
+                if news_norm == 0 or pv_norm == 0:
+                    continue
+                    
+                news_vector = news_vector / news_norm
+                pv_vector = pv_vector / pv_norm
+                
+                # Calculate similarity
+                similarity = float(np.dot(news_vector, pv_vector))
+                
+                if similarity > 0:  # Only consider positive similarities
+                    vector_scores.append({
+                        'vector': pv,
+                        'score': similarity
+                    })
+                    total_score += similarity
+            
+            # Sort vector scores and get top 5
+            vector_scores.sort(key=lambda x: x['score'], reverse=True)
+            top_vectors = vector_scores[:5]
+            
+            scored_items.append({
+                'item': item,
+                'total_score': total_score,
+                'top_vectors': top_vectors
+            })
+        except Exception as e:
+            logger.error(f"Error processing item {item.id}: {str(e)}")
+            continue
+    
+    # Sort items by total score
+    scored_items.sort(key=lambda x: x['total_score'], reverse=True)
     
     # Get all URLs
     urls = url_db.get_all_urls()
@@ -50,8 +108,7 @@ async def index(request: Request, db: AsyncSession = Depends(get_db)):
         "index.html",
         {
             "request": request,
-            "news_items": news_items,
-            "trending_news": trending_news,
+            "scored_items": scored_items,
             "urls": urls,
             "total_news": total_news,
             "enable_url_management": settings.ENABLE_URL_MANAGEMENT
@@ -379,3 +436,148 @@ async def view_umap(
                 "enable_url_management": settings.ENABLE_URL_MANAGEMENT
             }
         )
+
+# Preference Vector Routes
+@router.get("/preference-vectors", response_class=HTMLResponse)
+async def list_preference_vectors(request: Request, db: AsyncSession = Depends(get_db)):
+    """List all preference vectors."""
+    result = await db.execute(select(PreferenceVector))
+    vectors = result.scalars().all()
+    return request.state.templates.TemplateResponse(
+        "preference_vectors.html",
+        {
+            "request": request,
+            "vectors": vectors,
+            "enable_url_management": settings.ENABLE_URL_MANAGEMENT
+        }
+    )
+
+@router.get("/preference-vectors/new", response_class=HTMLResponse)
+async def new_preference_vector(request: Request):
+    """Show form to create a new preference vector."""
+    return request.state.templates.TemplateResponse(
+        "preference_vector_form.html",
+        {
+            "request": request,
+            "vector": None,
+            "enable_url_management": settings.ENABLE_URL_MANAGEMENT
+        }
+    )
+
+@router.post("/preference-vectors")
+async def create_preference_vector(
+    request: Request,
+    title: str = Form(...),
+    description: str = Form(...),
+    db: AsyncSession = Depends(get_db)
+):
+    """Create a new preference vector."""
+    try:
+        # Get embedding service
+        embedding_service = get_embedding_service()
+        
+        # Generate embedding from description
+        embedding = await embedding_service.get_embedding(description)
+        
+        # Create vector with embedding
+        vector = PreferenceVector(
+            title=title,
+            description=description,
+            embedding=embedding
+        )
+        db.add(vector)
+        await db.commit()
+        
+        # Update visualizations after adding new preference vector
+        await update_visualizations(db)
+        
+        return RedirectResponse(url="/preference-vectors", status_code=303)
+    except Exception as e:
+        return request.state.templates.TemplateResponse(
+            "preference_vector_form.html",
+            {
+                "request": request,
+                "vector": None,
+                "error": str(e),
+                "enable_url_management": settings.ENABLE_URL_MANAGEMENT
+            }
+        )
+
+@router.get("/preference-vectors/{vector_id}/edit", response_class=HTMLResponse)
+async def edit_preference_vector(request: Request, vector_id: int, db: AsyncSession = Depends(get_db)):
+    """Show form to edit a preference vector."""
+    result = await db.execute(select(PreferenceVector).filter(PreferenceVector.id == vector_id))
+    vector = result.scalar_one_or_none()
+    if not vector:
+        raise HTTPException(status_code=404, detail="Preference vector not found")
+    
+    return request.state.templates.TemplateResponse(
+        "preference_vector_form.html",
+        {
+            "request": request,
+            "vector": vector,
+            "enable_url_management": settings.ENABLE_URL_MANAGEMENT
+        }
+    )
+
+@router.post("/preference-vectors/{vector_id}")
+async def update_preference_vector(
+    request: Request,
+    vector_id: int,
+    title: str = Form(...),
+    description: str = Form(...),
+    db: AsyncSession = Depends(get_db)
+):
+    """Update a preference vector."""
+    try:
+        # Get embedding service
+        embedding_service = get_embedding_service()
+        
+        # Generate new embedding from updated description
+        embedding = await embedding_service.get_embedding(description)
+        
+        # Update vector with new embedding
+        result = await db.execute(select(PreferenceVector).filter(PreferenceVector.id == vector_id))
+        vector = result.scalar_one_or_none()
+        if not vector:
+            raise HTTPException(status_code=404, detail="Preference vector not found")
+        
+        vector.title = title
+        vector.description = description
+        vector.embedding = embedding
+        vector.updated_at = func.now()
+        
+        await db.commit()
+        
+        # Update visualizations after modifying preference vector
+        await update_visualizations(db)
+        
+        return RedirectResponse(url="/preference-vectors", status_code=303)
+    except Exception as e:
+        result = await db.execute(select(PreferenceVector).filter(PreferenceVector.id == vector_id))
+        vector = result.scalar_one_or_none()
+        return request.state.templates.TemplateResponse(
+            "preference_vector_form.html",
+            {
+                "request": request,
+                "vector": vector,
+                "error": str(e),
+                "enable_url_management": settings.ENABLE_URL_MANAGEMENT
+            }
+        )
+
+@router.post("/preference-vectors/{vector_id}/delete")
+async def delete_preference_vector(request: Request, vector_id: int, db: AsyncSession = Depends(get_db)):
+    """Delete a preference vector."""
+    result = await db.execute(select(PreferenceVector).filter(PreferenceVector.id == vector_id))
+    vector = result.scalar_one_or_none()
+    if not vector:
+        raise HTTPException(status_code=404, detail="Preference vector not found")
+    
+    await db.delete(vector)
+    await db.commit()
+    
+    # Update visualizations after deleting preference vector
+    await update_visualizations(db)
+    
+    return RedirectResponse(url="/preference-vectors", status_code=303)

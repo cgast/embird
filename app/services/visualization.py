@@ -9,6 +9,7 @@ from sqlalchemy import select, text, update, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.news import NewsItem, NewsClusters, NewsUMAP
+from app.models.preference_vector import PreferenceVector
 from app.services.faiss_service import get_faiss_service
 from app.config import settings
 
@@ -79,7 +80,7 @@ async def generate_clusters(db: AsyncSession, hours: int, min_similarity: float)
         raise
 
 async def generate_umap_visualization(db: AsyncSession, hours: int, min_similarity: float) -> List[dict]:
-    """Generate UMAP visualization data for news items."""
+    """Generate UMAP visualization data."""
     try:
         # First generate clusters to get cluster assignments
         clusters = await generate_clusters(db, hours, min_similarity)
@@ -107,79 +108,121 @@ async def generate_umap_visualization(db: AsyncSession, hours: int, min_similari
             logger.warning("No news items found for UMAP visualization")
             return []
 
-        # Extract embeddings and create UMAP input
-        embeddings = []
-        valid_items = []
+        # Get preference vectors from PostgreSQL
+        stmt = select(PreferenceVector).filter(PreferenceVector.embedding.is_not(None))
+        result = await db.execute(stmt)
+        preference_vectors = result.scalars().all()
+        logger.info(f"Found {len(preference_vectors)} preference vectors in PostgreSQL")
+        
+        # Process all embeddings together
+        all_embeddings = []
+        all_items = []
+        is_pref_vector = []  # Track which items are preference vectors
+
+        # Add news item embeddings
         for item in news_items:
             try:
-                vector = np.array(item.embedding, dtype=np.float32)
+                # Convert pgvector to numpy array
+                vector = np.array(item.embedding.tolist(), dtype=np.float32)
                 if vector.shape != (settings.VECTOR_DIMENSIONS,):
                     logger.error(f"Invalid vector shape for news item {item.id}: {vector.shape}")
                     continue
-                embeddings.append(vector)
-                valid_items.append(item)
+                all_embeddings.append(vector)
+                all_items.append(item)
+                is_pref_vector.append(False)
             except Exception as e:
                 logger.error(f"Error processing embedding for news item {item.id}: {str(e)}")
                 continue
-                
-        if not embeddings:
+
+        # Add preference vector embeddings
+        for vector in preference_vectors:
+            if vector.embedding is not None:
+                try:
+                    # Convert pgvector to numpy array
+                    pref_vector = np.array(vector.embedding.tolist(), dtype=np.float32)
+                    if pref_vector.shape != (settings.VECTOR_DIMENSIONS,):
+                        logger.error(f"Invalid vector shape for preference vector {vector.id}: {pref_vector.shape}")
+                        continue
+                    all_embeddings.append(pref_vector)
+                    all_items.append(vector)
+                    is_pref_vector.append(True)
+                    logger.info(f"Added preference vector {vector.id} ({vector.title}) to UMAP input")
+                except Exception as e:
+                    logger.error(f"Error processing embedding for preference vector {vector.id}: {str(e)}")
+                    continue
+
+        if not all_embeddings:
             logger.warning("No valid embeddings found for UMAP visualization")
             return []
-        
-        # Perform UMAP dimensionality reduction
-        # Use n_jobs=-1 for parallel processing, remove random_state for better performance
+
         try:
+            # Create UMAP reducer
             reducer = umap.UMAP(
                 n_components=2,
-                n_jobs=-1,  # Use all available CPU cores
-                min_dist=0.1,  # Slightly increase minimum distance for better spread
-                n_neighbors=15  # Default value, but explicitly set for clarity
+                random_state=42,
+                metric='cosine',
+                min_dist=0.1,
+                n_neighbors=15
             )
-            umap_result = reducer.fit_transform(embeddings)
+
+            # Convert to numpy array and get UMAP coordinates for all points together
+            embeddings_array = np.array(all_embeddings)
+            umap_result = reducer.fit_transform(embeddings_array)
+            
+            # Create visualization data
+            visualization_data = []
+            
+            # Process all points
+            for i, (item, is_pref) in enumerate(zip(all_items, is_pref_vector)):
+                try:
+                    if is_pref:
+                        # Add preference vector
+                        visualization_data.append({
+                            "id": f"pref_{item.id}",
+                            "title": item.title,
+                            "description": item.description,
+                            "x": float(umap_result[i][0]),
+                            "y": float(umap_result[i][1]),
+                            "type": "preference_vector",
+                            "opacity": 1.0
+                        })
+                        logger.info(f"Added preference vector {item.id} to visualization data at ({float(umap_result[i][0])}, {float(umap_result[i][1])})")
+                    else:
+                        # Add news item
+                        last_seen = item.last_seen_at
+                        if not last_seen.tzinfo:
+                            last_seen = last_seen.replace(tzinfo=timezone.utc)
+                        
+                        if last_seen >= now - timedelta(hours=1):
+                            opacity = 0.8
+                        elif last_seen <= now - timedelta(days=1):
+                            opacity = 0.2
+                        else:
+                            hours_old = (now - last_seen).total_seconds() / 3600
+                            opacity = 0.8 - (0.6 * (hours_old - 1) / 23)
+                        
+                        visualization_data.append({
+                            "id": item.id,
+                            "title": item.title,
+                            "url": item.url,
+                            "source_url": item.source_url,
+                            "last_seen_at": item.last_seen_at.isoformat() if item.last_seen_at else None,
+                            "x": float(umap_result[i][0]),
+                            "y": float(umap_result[i][1]),
+                            "cluster_id": item_to_cluster.get(item.id),
+                            "type": "news_item",
+                            "opacity": opacity
+                        })
+                except Exception as e:
+                    logger.error(f"Error creating visualization data for item {i}: {str(e)}")
+                    continue
+            
+            logger.info(f"Generated UMAP visualization with {len(visualization_data)} points")
+            return visualization_data
+            
         except Exception as e:
             logger.error(f"UMAP reduction error: {str(e)}\n{traceback.format_exc()}")
             raise
-        
-        # Calculate time-based opacity using timezone-aware UTC times
-        one_hour_ago = now - timedelta(hours=1)
-        yesterday = now - timedelta(days=1)
-        
-        # Combine UMAP coordinates with news items
-        visualization_data = []
-        for i, news_item in enumerate(valid_items):
-            try:
-                # Calculate opacity based on age
-                last_seen = news_item.last_seen_at
-                if not last_seen.tzinfo:
-                    # If the timestamp is naive, assume it's UTC
-                    last_seen = last_seen.replace(tzinfo=timezone.utc)
-                
-                if last_seen >= one_hour_ago:
-                    opacity = 0.8
-                elif last_seen <= yesterday:
-                    opacity = 0.2
-                else:
-                    # Linear interpolation between 0.8 and 0.2 for items between 1 hour and 1 day old
-                    hours_old = (now - last_seen).total_seconds() / 3600
-                    opacity = 0.8 - (0.6 * (hours_old - 1) / 23)  # 23 = 24 - 1
-                
-                visualization_data.append({
-                    "id": news_item.id,
-                    "title": news_item.title,
-                    "url": news_item.url,
-                    "source_url": news_item.source_url,
-                    "last_seen_at": news_item.last_seen_at.isoformat() if news_item.last_seen_at else None,
-                    "x": float(umap_result[i][0]),
-                    "y": float(umap_result[i][1]),
-                    "cluster_id": item_to_cluster.get(news_item.id),
-                    "opacity": opacity
-                })
-            except Exception as e:
-                logger.error(f"Error creating visualization data for news item {news_item.id}: {str(e)}")
-                continue
-        
-        logger.info(f"Generated UMAP visualization with {len(visualization_data)} points")
-        return visualization_data
         
     except Exception as e:
         logger.error(f"UMAP visualization error: {str(e)}\n{traceback.format_exc()}")

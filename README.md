@@ -1,3 +1,5 @@
+<img src="app/static/img/news-suck-logo.png" alt="news-suck logo" width="64" height="64" style="display: block; margin: 20px 0;">
+
 # news-suck
 
 An open-source project for crawling RSS feeds and websites, extracting news content, and storing it with vector embeddings for semantic search.

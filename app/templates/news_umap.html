@@ -14,9 +14,9 @@
 <div class="row mb-4">
     <div class="col">
         <h1>Visualization</h1>
-        <div class="text-muted">
-            Time Range: {{ hours }} hours | Similarity Threshold: {{ min_similarity }}%
-        </div>
+        <p class="lead">
+            Visualize news articles and preference vectors in 2D space using UMAP.
+        </p>
     </div>
 </div>
 
@@ -36,7 +36,7 @@
     </div>
 </div>
 
-<p class="text-muted">2D visualization of news articles using UMAP dimensionality reduction. Colors represent different clusters, and transparency indicates article age (newer articles are more opaque).</p>
+<p class="text-muted">2D visualization of news articles using UMAP dimensionality reduction. Colors represent different clusters, and transparency indicates article age (newer articles are more opaque). Squares represent preference vectors.</p>
 
 {% endblock %}
 
@@ -51,6 +51,12 @@ document.addEventListener('DOMContentLoaded', function() {
     const serverData = JSON.parse(document.getElementById('serverData').textContent);
 
     function createVisualization(data) {
+        // Debug logging
+        console.log("Total data points:", data.length);
+        console.log("News items:", data.filter(d => d.type === 'news_item').length);
+        console.log("Preference vectors:", data.filter(d => d.type === 'preference_vector').length);
+        console.log("Sample preference vector:", data.find(d => d.type === 'preference_vector'));
+
         // Clear previous visualization
         document.getElementById('visualization').innerHTML = '';
 
@@ -89,9 +95,9 @@ document.addEventListener('DOMContentLoaded', function() {
             .attr('width', width)
             .attr('height', height);
 
-        // Add points
+        // Add points for news items
         svg.selectAll('circle')
-            .data(data)
+            .data(data.filter(d => d.type === 'news_item'))
             .enter()
             .append('circle')
             .attr('cx', d => xScale(d.x))
@@ -125,21 +131,75 @@ document.addEventListener('DOMContentLoaded', function() {
             })
             .style('cursor', 'pointer');
 
-        // Add legend if there are clusters
+        // Add squares for preference vectors
+        const squareSize = 10;
+        const prefVectors = data.filter(d => d.type === 'preference_vector');
+        console.log("Preference vectors to render:", prefVectors);
+        
+        // Add squares
+        const squares = svg.selectAll('rect')
+            .data(prefVectors)
+            .enter()
+            .append('rect')
+            .attr('x', d => {
+                const x = xScale(d.x) - squareSize/2;
+                console.log(`Rendering square for ${d.title} at x: ${x}`);
+                return x;
+            })
+            .attr('y', d => {
+                const y = yScale(d.y) - squareSize/2;
+                console.log(`Rendering square for ${d.title} at y: ${y}`);
+                return y;
+            })
+            .attr('width', squareSize)
+            .attr('height', squareSize)
+            .attr('fill', 'none')
+            .attr('stroke', '#ffffff')
+            .attr('stroke-width', 2)
+            .on('mouseover', function(event, d) {
+                d3.select(this)
+                    .attr('stroke-width', 3);
+
+                tooltip.style.display = 'block';
+                tooltip.style.left = (event.pageX + 10) + 'px';
+                tooltip.style.top = (event.pageY + 10) + 'px';
+                tooltip.querySelector('.card-title').textContent = d.title;
+                tooltip.querySelector('.card-text').textContent = 'Preference Vector';
+                tooltip.querySelector('.cluster-info').textContent = d.description || '';
+            })
+            .on('mouseout', function() {
+                d3.select(this)
+                    .attr('stroke-width', 2);
+                tooltip.style.display = 'none';
+            });
+
+        // Add titles for preference vectors
+        svg.selectAll('text.pref-vector-label')
+            .data(prefVectors)
+            .enter()
+            .append('text')
+            .attr('class', 'pref-vector-label')
+            .attr('x', d => xScale(d.x) + squareSize)
+            .attr('y', d => yScale(d.y) + squareSize/2)
+            .attr('fill', '#ffffff')
+            .attr('font-size', '12px')
+            .text(d => d.title);
+
+        // Add legend
+        const legendSpacing = 20;
+        const legendCircleRadius = 5;
+        const legendTextOffset = 10;
+        const legend = svg.append('g')
+            .attr('class', 'legend')
+            .attr('transform', `translate(${width - 120}, ${margin.top})`);
+
+        // Add cluster legend items
         if (uniqueClusters.length > 0) {
-            const legendSpacing = 20;
-            const legendCircleRadius = 5;
-            const legendTextOffset = 10;
-
-            const legend = svg.append('g')
-                .attr('class', 'legend')
-                .attr('transform', `translate(${width - 120}, ${margin.top})`);
-
-            const legendItems = legend.selectAll('.legend-item')
+            const legendItems = legend.selectAll('.legend-item-cluster')
                 .data(uniqueClusters)
                 .enter()
                 .append('g')
-                .attr('class', 'legend-item')
+                .attr('class', 'legend-item-cluster')
                 .attr('transform', (d, i) => `translate(0, ${i * legendSpacing})`);
 
             legendItems.append('circle')
@@ -149,26 +209,46 @@ document.addEventListener('DOMContentLoaded', function() {
             legendItems.append('text')
                 .attr('x', legendTextOffset)
                 .attr('y', legendCircleRadius / 2)
-                .attr('fill', '#e0e0e0')  // Set legend text color to light gray
+                .attr('fill', '#e0e0e0')
                 .text(d => `Cluster ${d}`);
-                
-            // Add unclustered to legend
-            legend.append('g')
-                .attr('class', 'legend-item')
-                .attr('transform', `translate(0, ${uniqueClusters.length * legendSpacing})`)
-                .append('circle')
-                .attr('r', legendCircleRadius)
-                .attr('fill', '#cccccc');
-                
-            legend.append('g')
-                .attr('class', 'legend-item')
-                .attr('transform', `translate(0, ${uniqueClusters.length * legendSpacing})`)
-                .append('text')
-                .attr('x', legendTextOffset)
-                .attr('y', legendCircleRadius / 2)
-                .attr('fill', '#e0e0e0')  // Set legend text color to light gray
-                .text('Unclustered');
         }
+
+        // Add unclustered legend item
+        const unclusteredY = (uniqueClusters.length) * legendSpacing;
+        legend.append('g')
+            .attr('transform', `translate(0, ${unclusteredY})`)
+            .append('circle')
+            .attr('r', legendCircleRadius)
+            .attr('fill', '#cccccc');
+
+        legend.append('g')
+            .attr('transform', `translate(0, ${unclusteredY})`)
+            .append('text')
+            .attr('x', legendTextOffset)
+            .attr('y', legendCircleRadius / 2)
+            .attr('fill', '#e0e0e0')
+            .text('Unclustered');
+
+        // Add preference vector legend item
+        const prefVectorY = (uniqueClusters.length + 1) * legendSpacing;
+        legend.append('g')
+            .attr('transform', `translate(0, ${prefVectorY})`)
+            .append('rect')
+            .attr('x', -legendCircleRadius)
+            .attr('y', -legendCircleRadius)
+            .attr('width', legendCircleRadius * 2)
+            .attr('height', legendCircleRadius * 2)
+            .attr('fill', 'none')
+            .attr('stroke', '#ffffff')
+            .attr('stroke-width', 2);
+
+        legend.append('g')
+            .attr('transform', `translate(0, ${prefVectorY})`)
+            .append('text')
+            .attr('x', legendTextOffset)
+            .attr('y', legendCircleRadius / 2)
+            .attr('fill', '#e0e0e0')
+            .text('Preference Vector');
     }
 
     // Initialize with server data
@@ -179,6 +259,7 @@ document.addEventListener('DOMContentLoaded', function() {
             </div>
         `;
     } else if (serverData.visualization) {
+        console.log("Raw visualization data:", serverData.visualization);
         createVisualization(serverData.visualization);
     }
 });
