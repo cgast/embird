@@ -21,6 +21,7 @@ from app.models.news import (
 from app.services.db import get_db, url_db
 from app.services.embedding import get_embedding_service, EmbeddingService
 from app.services.visualization import generate_clusters, generate_umap_visualization
+from app.services.faiss_service import get_faiss_service
 from app.config import settings
 
 logger = logging.getLogger(__name__)
@@ -128,55 +129,50 @@ async def search_news(
         if not query_embedding:
             raise HTTPException(status_code=422, detail="Failed to generate embedding")
             
-        # Try to use Redis for search
-        try:
-            # Import Redis client
-            import sys
-            import os
-            sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))))
-            from crawler.app.services.redis_client import RedisClientContextManager
-            
-            async with RedisClientContextManager() as redis_client:
-                # Search using Redis
-                redis_results = await redis_client.search_vectors(query_embedding, limit=limit)
-                
-                if redis_results:
-                    # Get full news items from database
-                    item_ids = [item["id"] for item in redis_results]
-                    stmt = select(NewsItem).filter(NewsItem.id.in_(item_ids))
-                    result = await db.execute(stmt)
-                    db_items = {item.id: item for item in result.scalars().all()}
-                    
-                    # Create NewsItemSimilarity objects
-                    news_items = []
-                    for item in redis_results:
-                        if item["id"] in db_items:
-                            db_item = db_items[item["id"]]
-                            item_data = {
-                                'id': db_item.id,
-                                'title': db_item.title,
-                                'summary': db_item.summary,
-                                'url': db_item.url,
-                                'source_url': db_item.source_url,
-                                'first_seen_at': db_item.first_seen_at,
-                                'last_seen_at': db_item.last_seen_at,
-                                'hit_count': db_item.hit_count,
-                                'created_at': db_item.created_at,
-                                'updated_at': db_item.updated_at,
-                                'similarity': item["similarity"]
-                            }
-                            response_item = NewsItemSimilarity.model_validate(item_data)
-                            news_items.append(response_item)
-                    
-                    return news_items
-        except Exception as e:
-            logging.warning(f"Redis search failed, falling back to database: {str(e)}")
+        # Get FAISS service
+        faiss_service = get_faiss_service()
         
-        # If Redis search fails or returns no results, fall back to database search
-        # Convert embedding to string representation
+        # Search using FAISS
+        similar_items = await faiss_service.search_similar(
+            db,
+            np.array(query_embedding, dtype=np.float32),
+            k=limit,
+            min_similarity=0.5
+        )
+        
+        if similar_items:
+            # Get full news items from database
+            item_ids = [item_id for item_id, _ in similar_items]
+            stmt = select(NewsItem).filter(NewsItem.id.in_(item_ids))
+            result = await db.execute(stmt)
+            db_items = {item.id: item for item in result.scalars().all()}
+            
+            # Create NewsItemSimilarity objects
+            news_items = []
+            for item_id, similarity in similar_items:
+                if item_id in db_items:
+                    db_item = db_items[item_id]
+                    item_data = {
+                        'id': db_item.id,
+                        'title': db_item.title,
+                        'summary': db_item.summary,
+                        'url': db_item.url,
+                        'source_url': db_item.source_url,
+                        'first_seen_at': db_item.first_seen_at,
+                        'last_seen_at': db_item.last_seen_at,
+                        'hit_count': db_item.hit_count,
+                        'created_at': db_item.created_at,
+                        'updated_at': db_item.updated_at,
+                        'similarity': similarity
+                    }
+                    response_item = NewsItemSimilarity.model_validate(item_data)
+                    news_items.append(response_item)
+            
+            return news_items
+            
+        # If no results from FAISS, fall back to database search
         vector_str = f"[{','.join(str(x) for x in query_embedding)}]"
         
-        # Modified SQL using cast() function instead of :: operator
         stmt = text("""
             SELECT 
                 id, title, summary, url, source_url, 
@@ -189,7 +185,6 @@ async def search_news(
             LIMIT :limit
         """)
 
-        # Execute query with parameters
         result = await db.execute(
             stmt,
             {
@@ -200,7 +195,6 @@ async def search_news(
         
         news_items = []
         for row in result:
-            # Create a NewsItem instance
             news_item = NewsItem(
                 id=row.id,
                 title=row.title,
@@ -214,11 +208,8 @@ async def search_news(
                 updated_at=row.updated_at
             )
             
-            # First create a dictionary with all needed fields
             item_data = news_item.__dict__.copy()
             item_data['similarity'] = (1.0 - float(row.distance)) / 2.0
-
-            # Then validate the complete data
             response_item = NewsItemSimilarity.model_validate(item_data)
             news_items.append(response_item)
 

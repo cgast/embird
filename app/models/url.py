@@ -1,5 +1,5 @@
 import sqlite3
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import List, Optional
 from pydantic import BaseModel, HttpUrl, validator
 
@@ -66,7 +66,8 @@ class URLDatabase:
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
         
-        now = datetime.utcnow().isoformat()
+        # Use timezone-aware UTC time
+        now = datetime.now(timezone.utc).isoformat()
         
         cursor.execute(
             '''
@@ -143,7 +144,8 @@ class URLDatabase:
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
         
-        now = datetime.utcnow().isoformat()
+        # Use timezone-aware UTC time
+        now = datetime.now(timezone.utc).isoformat()
         
         cursor.execute(
             '''

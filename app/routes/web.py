@@ -233,71 +233,39 @@ async def view_clusters(
         )
         clusters = result.scalars().first()
         
-        # If no pre-generated clusters found, generate them
+        # If no pre-generated clusters found, generate them with parameters
         if not clusters:
-            clusters_data = await generate_clusters(db)
+            clusters_data = await generate_clusters(
+                db,
+                hours=settings.VISUALIZATION_TIME_RANGE,
+                min_similarity=settings.VISUALIZATION_SIMILARITY
+            )
         else:
             clusters_data = clusters.clusters
             
         # Convert clusters data to JSON-serializable format
-        serializable_clusters: Dict[str, List[dict]] = {}
+        serializable_clusters = {}
         for cluster_id, items in clusters_data.items():
             serializable_items = []
             for item in items:
-                # Item should already be a dictionary
+                # Ensure item is a dictionary
                 if isinstance(item, dict):
-                    # Use get() for all fields to handle missing values safely
-                    item_dict = {
-                        'id': item.get('id', 0),
+                    serializable_items.append({
+                        'id': item.get('id'),
                         'title': item.get('title', ''),
-                        'summary': item.get('summary', None),
+                        'summary': item.get('summary', ''),
                         'url': item.get('url', ''),
                         'source_url': item.get('source_url', ''),
-                        'similarity': item.get('similarity', 0.0),
-                        'hit_count': item.get('hit_count', 1),
-                    }
-                    
-                    # Handle datetime fields carefully
-                    first_seen = item.get('first_seen_at')
-                    if first_seen:
-                        item_dict['first_seen_at'] = first_seen.isoformat() if hasattr(first_seen, 'isoformat') else first_seen
-                    else:
-                        item_dict['first_seen_at'] = datetime.now().isoformat()
-                        
-                    last_seen = item.get('last_seen_at')
-                    if last_seen:
-                        item_dict['last_seen_at'] = last_seen.isoformat() if hasattr(last_seen, 'isoformat') else last_seen
-                    else:
-                        item_dict['last_seen_at'] = datetime.now().isoformat()
-                        
-                    created_at = item.get('created_at')
-                    if created_at:
-                        item_dict['created_at'] = created_at.isoformat() if hasattr(created_at, 'isoformat') else created_at
-                    else:
-                        item_dict['created_at'] = datetime.now().isoformat()
-                        
-                    updated_at = item.get('updated_at')
-                    if updated_at:
-                        item_dict['updated_at'] = updated_at.isoformat() if hasattr(updated_at, 'isoformat') else updated_at
-                    else:
-                        item_dict['updated_at'] = datetime.now().isoformat()
-                # But if it's a model, convert it
-                else:
-                    item_dict = {
-                        'id': item.id,
-                        'title': item.title,
-                        'summary': item.summary,
-                        'url': item.url,
-                        'source_url': item.source_url,
-                        'similarity': item.similarity,
-                        'first_seen_at': item.first_seen_at.isoformat() if hasattr(item.first_seen_at, 'isoformat') else item.first_seen_at,
-                        'last_seen_at': item.last_seen_at.isoformat() if hasattr(item.last_seen_at, 'isoformat') else item.last_seen_at,
-                        'hit_count': item.hit_count,
-                        'created_at': item.created_at.isoformat() if hasattr(item.created_at, 'isoformat') else item.created_at,
-                        'updated_at': item.updated_at.isoformat() if hasattr(item.updated_at, 'isoformat') else item.updated_at
-                    }
-                serializable_items.append(item_dict)
-            serializable_clusters[str(cluster_id)] = serializable_items
+                        'similarity': float(item.get('similarity', 0.0)),
+                        'hit_count': int(item.get('hit_count', 1)),
+                        'first_seen_at': item.get('first_seen_at'),
+                        'last_seen_at': item.get('last_seen_at'),
+                        'created_at': item.get('created_at'),
+                        'updated_at': item.get('updated_at')
+                    })
+            
+            if serializable_items:  # Only add clusters that have items
+                serializable_clusters[str(cluster_id)] = serializable_items
         
         return request.state.templates.TemplateResponse(
             "news_clusters.html",
@@ -337,10 +305,14 @@ async def view_umap(
         )
         umap_data = result.scalars().first()
         
-        # If no pre-generated visualization found, generate it
+        # If no pre-generated visualization found, generate it with parameters
         if not umap_data:
             logger.info("No pre-generated UMAP data found, generating new visualization")
-            visualization_data = await generate_umap_visualization(db)
+            visualization_data = await generate_umap_visualization(
+                db,
+                hours=settings.VISUALIZATION_TIME_RANGE,
+                min_similarity=settings.VISUALIZATION_SIMILARITY
+            )
         else:
             logger.info(f"Using pre-generated UMAP data from {umap_data.created_at}")
             visualization_data = umap_data.visualization

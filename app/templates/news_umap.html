@@ -30,9 +30,9 @@
 
 <div id="tooltip" class="card position-absolute" style="display: none; pointer-events: none; z-index: 1000;">
     <div class="card-body">
-        <h6 class="card-title mb-2"></h6>
-        <p class="card-text small text-muted mb-0"></p>
-        <p class="card-text small text-muted mb-0 cluster-info"></p>
+        <h6 class="card-title mb-2" style="color: #e0e0e0;"></h6>
+        <p class="card-text small mb-0" style="color: #a0a0a0;"></p>
+        <p class="card-text small mb-0 cluster-info" style="color: #a0a0a0;"></p>
     </div>
 </div>
 
@@ -149,6 +149,7 @@ document.addEventListener('DOMContentLoaded', function() {
             legendItems.append('text')
                 .attr('x', legendTextOffset)
                 .attr('y', legendCircleRadius / 2)
+                .attr('fill', '#e0e0e0')  // Set legend text color to light gray
                 .text(d => `Cluster ${d}`);
                 
             // Add unclustered to legend
@@ -165,6 +166,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 .append('text')
                 .attr('x', legendTextOffset)
                 .attr('y', legendCircleRadius / 2)
+                .attr('fill', '#e0e0e0')  // Set legend text color to light gray
                 .text('Unclustered');
         }
     }

@@ -11,11 +11,6 @@ class Settings(BaseSettings):
     DATABASE_URL: str = os.environ.get("DATABASE_URL", "postgresql://postgres:postgres@postgres:5432/newsdb")
     SQLITE_PATH: str = os.environ.get("SQLITE_PATH", "/app/data/urls.db")
     
-    # Redis settings
-    REDIS_URL: str = os.environ.get("REDIS_URL", "redis://localhost:6379")
-    REDIS_TTL: int = int(os.environ.get("REDIS_TTL", 86400))  # 24 hours in seconds
-    REDIS_PREFIX: str = os.environ.get("REDIS_PREFIX", "news:")
-    
     # API Keys
     COHERE_API_KEY: str = os.environ.get("COHERE_API_KEY", "")
     
@@ -39,7 +34,11 @@ class Settings(BaseSettings):
 
     # Visualization Settings
     VISUALIZATION_TIME_RANGE: int = int(os.environ.get("VISUALIZATION_TIME_RANGE", 48))  # hours
-    VISUALIZATION_SIMILARITY: float = float(os.environ.get("VISUALIZATION_SIMILARITY", 0.6))  # similarity threshold
+    VISUALIZATION_SIMILARITY: float = float(os.environ.get("VISUALIZATION_SIMILARITY", 0.55))  # similarity threshold
+    
+    # FAISS Settings
+    FAISS_UPDATE_INTERVAL: int = int(os.environ.get("FAISS_UPDATE_INTERVAL", 3600))  # 1 hour in seconds
+    FAISS_MAX_VECTORS: int = int(os.environ.get("FAISS_MAX_VECTORS", 10000))  # Maximum vectors to keep in memory
     
     # Ensure SQLite directory exists
     def __init__(self, **data):

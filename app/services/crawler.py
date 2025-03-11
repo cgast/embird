@@ -2,7 +2,7 @@ import asyncio
 import feedparser
 import logging
 import httpx
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import List, Dict, Any, Optional
 from sqlalchemy import select, delete, func
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
@@ -13,8 +13,6 @@ from app.models.url import URL, URLDatabase
 from app.models.news import NewsItem, NewsItemCreate
 from app.services.extractor import ContentExtractor
 from app.services.embedding import EmbeddingService
-from app.services.redis_client import get_redis_client
-from app.services.visualization import update_visualizations
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -45,8 +43,8 @@ class Crawler:
     async def _cleanup_old_news(self, session: AsyncSession):
         """Clean up old news items based on retention settings."""
         try:
-            # Delete items older than retention period
-            retention_date = datetime.utcnow() - timedelta(days=settings.NEWS_RETENTION_DAYS)
+            # Delete items older than retention period using timezone-aware UTC time
+            retention_date = datetime.now(timezone.utc) - timedelta(days=settings.NEWS_RETENTION_DAYS)
             delete_stmt = delete(NewsItem).where(NewsItem.last_seen_at < retention_date)
             await session.execute(delete_stmt)
 
@@ -75,11 +73,6 @@ class Crawler:
                 await self._crawl_rss(url_item)
             else:
                 await self._crawl_homepage(url_item)
-            
-            # Update visualizations after crawling each URL
-            async with AsyncSessionLocal() as session:
-                await update_visualizations(session)
-                
         except Exception as e:
             logger.error(f"Error crawling {url_item.url}: {str(e)}")
 
@@ -181,41 +174,10 @@ class Crawler:
                 existing_item = result.scalars().first()
                 
                 if existing_item:
-                    # Update existing item
+                    # Update existing item with timezone-aware UTC time
                     existing_item.hit_count += 1
-                    existing_item.last_seen_at = datetime.utcnow()
+                    existing_item.last_seen_at = datetime.now(timezone.utc)
                     await session.commit()
-                    
-                    # Update the item in Redis too
-                    try:
-                        redis_client = await get_redis_client()
-                        metadata = {
-                            "title": existing_item.title,
-                            "url": existing_item.url,
-                            "source_url": existing_item.source_url
-                        }
-                        
-                        # Convert numpy array to list if needed
-                        embedding = None
-                        if existing_item.embedding is not None:
-                            # Check if it's a numpy array
-                            if hasattr(existing_item.embedding, 'tolist'):
-                                embedding = existing_item.embedding.tolist()
-                            else:
-                                embedding = existing_item.embedding
-                            
-                            # Only proceed if we have a valid embedding
-                            if embedding is not None:
-                                print(f"CRAWLER DEBUG: Attempting to store vector for existing item {existing_item.id}")
-                                await redis_client.store_vector(
-                                    news_id=existing_item.id,
-                                    embedding=embedding,
-                                    metadata=metadata
-                                )
-                                print(f"CRAWLER DEBUG: Successfully stored vector for existing item {existing_item.id}")
-                    except Exception as redis_error:
-                        print(f"CRAWLER DEBUG: Redis error when updating existing item: {redis_error}")
-                    
                     logger.info(f"Updated existing news item: {title}")
                 else:
                     # Get content and summary for new item
@@ -234,8 +196,8 @@ class Crawler:
                         logger.warning(f"Failed to generate embedding for {url}")
                         return
                     
-                    # Create new news item
-                    now = datetime.utcnow()
+                    # Create new news item with timezone-aware UTC time
+                    now = datetime.now(timezone.utc)
                     news_item = NewsItem(
                         title=title,
                         summary=content_info["summary"],
@@ -250,36 +212,6 @@ class Crawler:
                     # Add to database
                     session.add(news_item)
                     await session.commit()
-                    
-                    # Also store in Redis for fast access
-                    try:
-                        redis_client = await get_redis_client()
-                        metadata = {
-                            "title": title,
-                            "url": url,
-                            "source_url": source_url
-                        }
-                        
-                        # Ensure embedding is a list (not a numpy array)
-                        embedding_list = None
-                        if embedding is not None:
-                            if hasattr(embedding, 'tolist'):
-                                embedding_list = embedding.tolist()
-                            else:
-                                embedding_list = embedding
-                        
-                        # Only proceed if we have a valid embedding
-                        if embedding_list is not None:
-                            print(f"CRAWLER DEBUG: Attempting to store vector for new item {news_item.id}")
-                            await redis_client.store_vector(
-                                news_id=news_item.id,
-                                embedding=embedding_list,
-                                metadata=metadata
-                            )
-                            print(f"CRAWLER DEBUG: Successfully stored vector for new item {news_item.id}")
-                    except Exception as redis_error:
-                        print(f"CRAWLER DEBUG: Redis error when storing new item: {redis_error}")
-                    
                     logger.info(f"Added new news item: {title}")
         
         except Exception as e:
@@ -288,3 +220,40 @@ class Crawler:
     async def close(self):
         """Close the HTTP client."""
         await self.http_client.aclose()
+
+# Global instance
+crawler = None
+
+async def start_crawler():
+    """Start the crawler service."""
+    global crawler
+    from app.services.db import url_db
+    
+    try:
+        # Initialize crawler
+        crawler = Crawler(url_db)
+        logger.info("Crawler service initialized")
+        
+        while True:
+            # Get all URLs to crawl
+            urls = url_db.get_all_urls()
+            
+            # Crawl each URL
+            for url in urls:
+                await crawler.crawl_url(url)
+            
+            # Sleep for the configured interval
+            logger.info(f"Crawler cycle completed, sleeping for {settings.CRAWLER_INTERVAL} seconds")
+            await asyncio.sleep(settings.CRAWLER_INTERVAL)
+            
+    except Exception as e:
+        logger.error(f"Crawler service error: {str(e)}")
+        if crawler:
+            await crawler.close()
+
+async def stop_crawler():
+    """Stop the crawler service."""
+    global crawler
+    if crawler:
+        await crawler.close()
+        logger.info("Crawler service stopped")

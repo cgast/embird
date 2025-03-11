@@ -5,7 +5,7 @@ export PYTHONPATH=/app:/app/shared
 
 if [ "$SERVICE_TYPE" = "crawler" ]; then
     echo "Starting crawler service..."
-    python -m app.main
+    python -m app.crawler_service
 else
     echo "Starting web service..."
     uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}
