@@ -187,8 +187,8 @@ class Crawler:
                         logger.warning(f"Failed to extract content from {url}")
                         return
                     
-                    # Create embedding for the content
-                    text_for_embedding = f"{title}. {content_info['summary']}"
+                    # Create embedding based on settings
+                    text_for_embedding = title if settings.EMBED_TITLE_ONLY else f"{title}. {content_info['summary']}"
                     embedding = await self.embedding_service.get_embedding(text_for_embedding)
                     
                     # Skip if embedding generation failed
