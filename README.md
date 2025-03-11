@@ -136,7 +136,8 @@ Configuration options can be set via environment variables:
 - `FAISS_UPDATE_INTERVAL`: Interval between FAISS index updates in seconds (default: 3600)
 - `FAISS_MAX_VECTORS`: Maximum number of vectors to keep in FAISS index (default: 10000)
 - `DEBUG`: Enable debug mode (default: False)
-- `ENABLE_URL_MANAGEMENT`: Enable URL management mode, helps to prevent destruction of the demo site (default: True)
+- `ENABLE_URL_MANAGEMENT`: Enable Sources (URL) management mode, helps to prevent destruction of the demo site (default: True)
+- `ENABLE_PREFERENCE_MANAGEMENT`: Enable Section (Preference-Vector) management mode, helps to prevent destruction of the demo site (default: True)
 - `EMBED_TITLE_ONLY`: Use only the title for generating embeddings instead of title + summary (default: True)
 
 ## License

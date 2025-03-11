@@ -34,10 +34,12 @@ async def index(request: Request, db: AsyncSession = Depends(get_db)):
     result = await db.execute(query)
     news_items = result.scalars().all()
     
-    # Get all preference vectors from PostgreSQL
-    query = select(PreferenceVector).filter(PreferenceVector.embedding.is_not(None))
-    result = await db.execute(query)
-    preference_vectors = result.scalars().all()
+    # Get all preference vectors from PostgreSQL if enabled
+    preference_vectors = []
+    if settings.ENABLE_PREFERENCE_MANAGEMENT:
+        query = select(PreferenceVector).filter(PreferenceVector.embedding.is_not(None))
+        result = await db.execute(query)
+        preference_vectors = result.scalars().all()
     
     # Calculate proximity scores for each news item
     scored_items = []
@@ -111,7 +113,8 @@ async def index(request: Request, db: AsyncSession = Depends(get_db)):
             "scored_items": scored_items,
             "urls": urls,
             "total_news": total_news,
-            "enable_url_management": settings.ENABLE_URL_MANAGEMENT
+            "enable_url_management": settings.ENABLE_URL_MANAGEMENT,
+            "enable_preference_management": settings.ENABLE_PREFERENCE_MANAGEMENT
         }
     )
 
@@ -127,7 +130,8 @@ async def list_urls(request: Request):
             "request": request,
             "urls": urls,
             "mode": "list",
-            "enable_url_management": settings.ENABLE_URL_MANAGEMENT
+            "enable_url_management": settings.ENABLE_URL_MANAGEMENT,
+            "enable_preference_management": settings.ENABLE_PREFERENCE_MANAGEMENT
         }
     )
 
@@ -141,7 +145,8 @@ async def add_url_form(request: Request):
         {
             "request": request,
             "mode": "add",
-            "enable_url_management": settings.ENABLE_URL_MANAGEMENT
+            "enable_url_management": settings.ENABLE_URL_MANAGEMENT,
+            "enable_preference_management": settings.ENABLE_PREFERENCE_MANAGEMENT
         }
     )
 
@@ -165,7 +170,8 @@ async def add_url(
                 "request": request,
                 "error": str(e),
                 "mode": "add",
-                "enable_url_management": settings.ENABLE_URL_MANAGEMENT
+                "enable_url_management": settings.ENABLE_URL_MANAGEMENT,
+                "enable_preference_management": settings.ENABLE_PREFERENCE_MANAGEMENT
             }
         )
 
@@ -184,7 +190,8 @@ async def delete_url_confirm(request: Request, url_id: int):
             "request": request,
             "url": url,
             "mode": "delete",
-            "enable_url_management": settings.ENABLE_URL_MANAGEMENT
+            "enable_url_management": settings.ENABLE_URL_MANAGEMENT,
+            "enable_preference_management": settings.ENABLE_PREFERENCE_MANAGEMENT
         }
     )
 
@@ -245,7 +252,8 @@ async def list_news(
             "page": page,
             "total_pages": total_pages,
             "total_items": total_items,
-            "enable_url_management": settings.ENABLE_URL_MANAGEMENT
+            "enable_url_management": settings.ENABLE_URL_MANAGEMENT,
+            "enable_preference_management": settings.ENABLE_PREFERENCE_MANAGEMENT
         }
     )
 
@@ -279,7 +287,8 @@ async def view_news_item(
             "request": request,
             "news_item": news_item,
             "related_items": related_items,
-            "enable_url_management": settings.ENABLE_URL_MANAGEMENT
+            "enable_url_management": settings.ENABLE_URL_MANAGEMENT,
+            "enable_preference_management": settings.ENABLE_PREFERENCE_MANAGEMENT
         }
     )
 
@@ -290,7 +299,8 @@ async def search_form(request: Request):
         "search.html",
         {
             "request": request,
-            "enable_url_management": settings.ENABLE_URL_MANAGEMENT
+            "enable_url_management": settings.ENABLE_URL_MANAGEMENT,
+            "enable_preference_management": settings.ENABLE_PREFERENCE_MANAGEMENT
         }
     )
 
@@ -351,7 +361,8 @@ async def view_clusters(
                 "initial_clusters": serializable_clusters,
                 "hours": settings.VISUALIZATION_TIME_RANGE,
                 "min_similarity": settings.VISUALIZATION_SIMILARITY * 100,  # Convert to percentage for display
-                "enable_url_management": settings.ENABLE_URL_MANAGEMENT
+                "enable_url_management": settings.ENABLE_URL_MANAGEMENT,
+                "enable_preference_management": settings.ENABLE_PREFERENCE_MANAGEMENT
             }
         )
     except Exception as e:
@@ -361,7 +372,8 @@ async def view_clusters(
             {
                 "request": request,
                 "error": "Failed to load clusters. Please try again later.",
-                "enable_url_management": settings.ENABLE_URL_MANAGEMENT
+                "enable_url_management": settings.ENABLE_URL_MANAGEMENT,
+                "enable_preference_management": settings.ENABLE_PREFERENCE_MANAGEMENT
             }
         )
 
@@ -405,7 +417,8 @@ async def view_umap(
                 "visualization": visualization_data,
                 "hours": settings.VISUALIZATION_TIME_RANGE,
                 "min_similarity": settings.VISUALIZATION_SIMILARITY * 100,
-                "enable_url_management": settings.ENABLE_URL_MANAGEMENT
+                "enable_url_management": settings.ENABLE_URL_MANAGEMENT,
+                "enable_preference_management": settings.ENABLE_PREFERENCE_MANAGEMENT
             })
         
         # Otherwise return HTML
@@ -416,7 +429,8 @@ async def view_umap(
                 "initial_visualization": visualization_data,
                 "hours": settings.VISUALIZATION_TIME_RANGE,
                 "min_similarity": settings.VISUALIZATION_SIMILARITY * 100,  # Convert to percentage for display
-                "enable_url_management": settings.ENABLE_URL_MANAGEMENT
+                "enable_url_management": settings.ENABLE_URL_MANAGEMENT,
+                "enable_preference_management": settings.ENABLE_PREFERENCE_MANAGEMENT
             }
         )
     except Exception as e:
@@ -433,7 +447,8 @@ async def view_umap(
             {
                 "request": request,
                 "error": error_msg,
-                "enable_url_management": settings.ENABLE_URL_MANAGEMENT
+                "enable_url_management": settings.ENABLE_URL_MANAGEMENT,
+                "enable_preference_management": settings.ENABLE_PREFERENCE_MANAGEMENT
             }
         )
 
@@ -441,6 +456,8 @@ async def view_umap(
 @router.get("/preference-vectors", response_class=HTMLResponse)
 async def list_preference_vectors(request: Request, db: AsyncSession = Depends(get_db)):
     """List all preference vectors."""
+    if not settings.ENABLE_PREFERENCE_MANAGEMENT:
+        raise HTTPException(status_code=403, detail="Preference vector management is disabled")
     result = await db.execute(select(PreferenceVector))
     vectors = result.scalars().all()
     return request.state.templates.TemplateResponse(
@@ -448,19 +465,23 @@ async def list_preference_vectors(request: Request, db: AsyncSession = Depends(g
         {
             "request": request,
             "vectors": vectors,
-            "enable_url_management": settings.ENABLE_URL_MANAGEMENT
+            "enable_url_management": settings.ENABLE_URL_MANAGEMENT,
+            "enable_preference_management": settings.ENABLE_PREFERENCE_MANAGEMENT
         }
     )
 
 @router.get("/preference-vectors/new", response_class=HTMLResponse)
 async def new_preference_vector(request: Request):
     """Show form to create a new preference vector."""
+    if not settings.ENABLE_PREFERENCE_MANAGEMENT:
+        raise HTTPException(status_code=403, detail="Preference vector management is disabled")
     return request.state.templates.TemplateResponse(
         "preference_vector_form.html",
         {
             "request": request,
             "vector": None,
-            "enable_url_management": settings.ENABLE_URL_MANAGEMENT
+            "enable_url_management": settings.ENABLE_URL_MANAGEMENT,
+            "enable_preference_management": settings.ENABLE_PREFERENCE_MANAGEMENT
         }
     )
 
@@ -472,6 +493,8 @@ async def create_preference_vector(
     db: AsyncSession = Depends(get_db)
 ):
     """Create a new preference vector."""
+    if not settings.ENABLE_PREFERENCE_MANAGEMENT:
+        raise HTTPException(status_code=403, detail="Preference vector management is disabled")
     try:
         # Get embedding service
         embedding_service = get_embedding_service()
@@ -499,13 +522,16 @@ async def create_preference_vector(
                 "request": request,
                 "vector": None,
                 "error": str(e),
-                "enable_url_management": settings.ENABLE_URL_MANAGEMENT
+                "enable_url_management": settings.ENABLE_URL_MANAGEMENT,
+                "enable_preference_management": settings.ENABLE_PREFERENCE_MANAGEMENT
             }
         )
 
 @router.get("/preference-vectors/{vector_id}/edit", response_class=HTMLResponse)
 async def edit_preference_vector(request: Request, vector_id: int, db: AsyncSession = Depends(get_db)):
     """Show form to edit a preference vector."""
+    if not settings.ENABLE_PREFERENCE_MANAGEMENT:
+        raise HTTPException(status_code=403, detail="Preference vector management is disabled")
     result = await db.execute(select(PreferenceVector).filter(PreferenceVector.id == vector_id))
     vector = result.scalar_one_or_none()
     if not vector:
@@ -516,7 +542,8 @@ async def edit_preference_vector(request: Request, vector_id: int, db: AsyncSess
         {
             "request": request,
             "vector": vector,
-            "enable_url_management": settings.ENABLE_URL_MANAGEMENT
+            "enable_url_management": settings.ENABLE_URL_MANAGEMENT,
+            "enable_preference_management": settings.ENABLE_PREFERENCE_MANAGEMENT
         }
     )
 
@@ -529,6 +556,8 @@ async def update_preference_vector(
     db: AsyncSession = Depends(get_db)
 ):
     """Update a preference vector."""
+    if not settings.ENABLE_PREFERENCE_MANAGEMENT:
+        raise HTTPException(status_code=403, detail="Preference vector management is disabled")
     try:
         # Get embedding service
         embedding_service = get_embedding_service()
@@ -562,13 +591,16 @@ async def update_preference_vector(
                 "request": request,
                 "vector": vector,
                 "error": str(e),
-                "enable_url_management": settings.ENABLE_URL_MANAGEMENT
+                "enable_url_management": settings.ENABLE_URL_MANAGEMENT,
+                "enable_preference_management": settings.ENABLE_PREFERENCE_MANAGEMENT
             }
         )
 
 @router.post("/preference-vectors/{vector_id}/delete")
 async def delete_preference_vector(request: Request, vector_id: int, db: AsyncSession = Depends(get_db)):
     """Delete a preference vector."""
+    if not settings.ENABLE_PREFERENCE_MANAGEMENT:
+        raise HTTPException(status_code=403, detail="Preference vector management is disabled")
     result = await db.execute(select(PreferenceVector).filter(PreferenceVector.id == vector_id))
     vector = result.scalar_one_or_none()
     if not vector:
