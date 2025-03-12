@@ -1,4 +1,6 @@
-<img src="app/static/img/EmBird-logo.png" alt="EmBird logo" width="64" height="64" style="display: block; margin: 20px 0;">
+<center>
+  <img src="app/static/img/EmBird-logo.png" alt="EmBird logo" width="252" height="252" style="display: block; margin: 20px 0;">
+</center>
 
 # EmBird
 
