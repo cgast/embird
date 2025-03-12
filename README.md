@@ -49,8 +49,8 @@ The system uses FAISS (Facebook AI Similarity Search) for efficient vector opera
 #### Clone the repository
 
 ```bash
-git clone https://github.com/cgast/news-suck.git
-cd news-suck
+git clone https://github.com/cgast/embird.git
+cd embird
 ```
 
 #### Create a `.env` file with your Cohere API key

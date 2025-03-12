@@ -1,4 +1,4 @@
-news-suck/
+embird/
 ├── .env.example             # Environment variables template
 ├── .gitignore              # Git ignore rules
 ├── README.md               # Project documentation
