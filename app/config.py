@@ -4,7 +4,7 @@ from pathlib import Path
 
 class Settings(BaseSettings):
     # App Settings
-    APP_NAME: str = "news-suck"
+    APP_NAME: str = "EmBird"
     DEBUG: bool = os.environ.get("DEBUG", "False").lower() in ("true", "1", "t")
     ENABLE_URL_MANAGEMENT: bool = os.environ.get("ENABLE_URL_MANAGEMENT", "True").lower() in ("true", "1", "t")
     ENABLE_PREFERENCE_MANAGEMENT: bool = os.environ.get("ENABLE_PREFERENCE_MANAGEMENT", "True").lower() in ("true", "1", "t")

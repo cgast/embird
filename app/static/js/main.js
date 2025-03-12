@@ -1,4 +1,4 @@
-// Main JavaScript for news-suck
+// Main JavaScript for EmBird
 
 document.addEventListener('DOMContentLoaded', function() {
     // Add active class to current nav item

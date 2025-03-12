@@ -1,8 +1,8 @@
-<img src="app/static/img/news-suck-logo.png" alt="news-suck logo" width="64" height="64" style="display: block; margin: 20px 0;">
+<img src="app/static/img/EmBird-logo.png" alt="EmBird logo" width="64" height="64" style="display: block; margin: 20px 0;">
 
-# news-suck
+# EmBird
 
-An open-source project for crawling RSS feeds and websites, extracting news content, and storing it with vector embeddings for semantic search.
+An open-source project for crawling RSS feeds and websites, extracting news content and storing it with vector embeddings for semantic search - to give you a bird's eye view on your news.
 
 ## Features
 
@@ -50,7 +50,7 @@ The system uses FAISS (Facebook AI Similarity Search) for efficient vector opera
 
 ```bash
 git clone https://github.com/cgast/news-suck.git
-cd news-suckr
+cd news-suck
 ```
 
 #### Create a `.env` file with your Cohere API key

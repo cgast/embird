@@ -1,1 +1,1 @@
-"""Shared models package for news-suck."""
+"""Shared models package for EmBird."""
