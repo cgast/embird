@@ -21,10 +21,52 @@ logging.basicConfig(
 
 logger = logging.getLogger(__name__)
 
-# Initialize FastAPI app
+# Initialize FastAPI app with comprehensive API documentation
 app = FastAPI(
     title=settings.APP_NAME,
-    debug=settings.DEBUG
+    description="""
+## EmBird - Semantic News Aggregation API
+
+EmBird is an open-source platform for crawling, aggregating, and semantically analyzing news content.
+It provides powerful vector-based similarity search, automatic clustering, and visualization capabilities.
+
+### Key Features
+
+* **News Aggregation**: Crawl RSS feeds and websites for news content
+* **Semantic Search**: Find related articles using AI-powered embeddings
+* **Clustering**: Automatically group similar news stories
+* **Visualization**: UMAP-based 2D visualization of news relationships
+* **Preference Vectors**: Personalize news ranking based on your interests
+
+### Technology Stack
+
+* Vector embeddings powered by **Cohere API** (1024-dimensional)
+* **PostgreSQL** with pgvector extension for vector similarity
+* **FAISS** for in-memory clustering and fast similarity search
+* **UMAP** for dimensionality reduction
+
+### Getting Started
+
+1. Configure your sources using the `/api/urls` endpoints
+2. Let the crawler fetch content automatically (runs hourly)
+3. Search and explore news using `/api/news/search`, `/api/news/clusters`, or `/api/news/umap`
+4. Optionally create preference vectors to personalize your news feed
+
+For more information, visit [GitHub](https://github.com/cgast/embird)
+    """,
+    version="1.0.0",
+    debug=settings.DEBUG,
+    docs_url="/api/docs",  # Swagger UI
+    redoc_url="/api/redoc",  # ReDoc
+    openapi_url="/api/openapi.json",
+    contact={
+        "name": "EmBird Project",
+        "url": "https://github.com/cgast/embird",
+    },
+    license_info={
+        "name": "MIT License",
+        "url": "https://opensource.org/licenses/MIT",
+    },
 )
 
 # Mount static files
