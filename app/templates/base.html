@@ -15,92 +15,144 @@
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js" defer></script>
     <script defer src="https://umami.subprompt.org/script.js" data-website-id="72150aa4-efc9-4173-a946-cbfeb67be4a9"></script>
     <style>
-        /* Monochrome Dark Bootstrap Theme with Yellow Highlights */
+        /* Theme Variables */
         :root {
-            /* Base colors */
             --bs-font-sans-serif: "Geist", "Helvetica Neue", Helvetica, Arial, sans-serif;
-            --bs-body-bg: #121212;
-            --bs-body-color: #e0e0e0;
-            --bs-secondary-color: rgba(99, 99, 110, 0.75);
-            
-            /* Primary colors - dark yellow */
-            --bs-primary: #d4b106;
-            --bs-primary-rgb: 212, 177, 6;
-            --bs-primary-darken: #b39205;
-            
-            /* Secondary colors - grayscale */
+        }
+
+        /* Light Theme (Default) */
+        :root[data-theme="light"], :root:not([data-theme]) {
+            --bs-body-bg: #ffffff;
+            --bs-body-color: #333333;
+            --bs-secondary-color: rgba(108, 117, 125, 0.75);
+
+            /* Primary colors - muted blue */
+            --bs-primary: #4a7ba7;
+            --bs-primary-rgb: 74, 123, 167;
+            --bs-primary-darken: #3a6585;
+
+            /* Secondary colors */
             --bs-secondary: #6c757d;
             --bs-secondary-rgb: 108, 117, 125;
-            
-            /* Success colors - muted green */
-            --bs-success: #5a7052;
-            --bs-success-rgb: 90, 112, 82;
-            
-            /* Danger colors - muted red */
+
+            /* Success, danger, warning, info - muted */
+            --bs-success: #5a8052;
             --bs-danger: #a05252;
-            --bs-danger-rgb: 160, 82, 82;
-            
-            /* Warning colors - yellow */
-            --bs-warning: #d4b106;
-            --bs-warning-rgb: 212, 177, 6;
-            
-            /* Info colors - light gray */
-            --bs-info: #a0a0a0;
-            --bs-info-rgb: 160, 160, 160;
-            
-            /* Light and dark colors */
-            --bs-light: #2d2d2d;
-            --bs-light-rgb: 45, 45, 45;
-            --bs-dark: #1a1a1a;
-            --bs-dark-rgb: 26, 26, 26;
-            
-            /* Background customization */
-            --bs-border-color: #333333;
-            --bs-border-width: 1px;
-            --bs-border-radius: 0.375rem;
-            
+            --bs-warning: #b8981a;
+            --bs-info: #5a7d9e;
+
             /* Component colors */
-            --bs-card-bg: #1e1e1e;
-            --bs-modal-bg: #1e1e1e;
-            --bs-dropdown-bg: #1e1e1e;
+            --bs-light: #f8f9fa;
+            --bs-dark: #343a40;
+            --bs-border-color: #dee2e6;
+            --bs-card-bg: #ffffff;
+            --bs-modal-bg: #ffffff;
+            --bs-dropdown-bg: #ffffff;
+            --bs-dropdown-link-hover-bg: #f8f9fa;
+            --bs-dropdown-link-active-bg: #4a7ba7;
+
+            /* Input fields */
+            --bs-input-bg: #ffffff;
+            --bs-input-color: #333333;
+            --bs-input-border-color: #ced4da;
+            --bs-input-focus-border-color: #4a7ba7;
+            --bs-input-focus-box-shadow: 0 0 0 0.25rem rgba(74, 123, 167, 0.25);
+
+            /* Table colors */
+            --bs-table-bg: #ffffff;
+            --bs-table-striped-bg: #f8f9fa;
+            --bs-table-hover-bg: #f1f3f5;
+            --bs-table-border-color: #dee2e6;
+
+            /* Navbar */
+            --navbar-bg: #343a40;
+            --navbar-color: #ffffff;
+
+            /* Links */
+            --link-color: #4a7ba7;
+            --link-hover-color: #3a6585;
+        }
+
+        /* Dark Theme */
+        :root[data-theme="dark"] {
+            --bs-body-bg: #1a1a1a;
+            --bs-body-color: #e0e0e0;
+            --bs-secondary-color: rgba(160, 160, 160, 0.75);
+
+            /* Primary colors - muted blue */
+            --bs-primary: #6b9bc3;
+            --bs-primary-rgb: 107, 155, 195;
+            --bs-primary-darken: #5a8aad;
+
+            /* Secondary colors */
+            --bs-secondary: #a0a0a0;
+            --bs-secondary-rgb: 160, 160, 160;
+
+            /* Success, danger, warning, info - muted */
+            --bs-success: #6a9062;
+            --bs-danger: #b06262;
+            --bs-warning: #c8a82a;
+            --bs-info: #7a9dbe;
+
+            /* Component colors */
+            --bs-light: #2d2d2d;
+            --bs-dark: #121212;
+            --bs-border-color: #3a3a3a;
+            --bs-card-bg: #242424;
+            --bs-modal-bg: #242424;
+            --bs-dropdown-bg: #242424;
             --bs-dropdown-link-hover-bg: #333333;
-            --bs-dropdown-link-active-bg: #d4b106;
-            
+            --bs-dropdown-link-active-bg: #6b9bc3;
+
             /* Input fields */
             --bs-input-bg: #2d2d2d;
             --bs-input-color: #e0e0e0;
             --bs-input-border-color: #444444;
-            --bs-input-focus-border-color: #d4b106;
-            --bs-input-focus-box-shadow: 0 0 0 0.25rem rgba(212, 177, 6, 0.25);
-            
+            --bs-input-focus-border-color: #6b9bc3;
+            --bs-input-focus-box-shadow: 0 0 0 0.25rem rgba(107, 155, 195, 0.25);
+
             /* Table colors */
-            --bs-table-bg: #1e1e1e;
-            --bs-table-striped-bg: #252525;
-            --bs-table-hover-bg: #2a2a2a;
-            --bs-table-border-color: #333333;
+            --bs-table-bg: #242424;
+            --bs-table-striped-bg: #2a2a2a;
+            --bs-table-hover-bg: #303030;
+            --bs-table-border-color: #3a3a3a;
+
+            /* Navbar */
+            --navbar-bg: #121212;
+            --navbar-color: #e0e0e0;
+
+            /* Links */
+            --link-color: #6b9bc3;
+            --link-hover-color: #5a8aad;
         }
 
-        /* Header colors - dark yellow */
+        body {
+            background-color: var(--bs-body-bg);
+            color: var(--bs-body-color);
+            transition: background-color 0.3s ease, color 0.3s ease;
+        }
+
+        /* Primary colors */
         .bg-primary, .btn-primary {
             background-color: var(--bs-primary) !important;
             border-color: var(--bs-primary) !important;
-            color: #000 !important;
+            color: #fff !important;
         }
 
         .btn-primary:hover, .btn-primary:focus {
             background-color: var(--bs-primary-darken) !important;
             border-color: var(--bs-primary-darken) !important;
-            color: #000 !important;
+            color: #fff !important;
         }
 
         /* Links */
         a {
-            color: #d4b106;
+            color: var(--link-color);
             text-decoration: none;
         }
 
         a:hover {
-            color: #b39205;
+            color: var(--link-hover-color);
             text-decoration: underline;
         }
 
@@ -140,13 +192,26 @@
 
         /* Navbar */
         .navbar-dark {
-            background-color: var(--bs-dark);
+            background-color: var(--navbar-bg) !important;
+        }
+
+        .navbar-dark .navbar-nav .nav-link {
+            color: var(--navbar-color);
         }
 
         .navbar-brand img {
             height: 24px;
             width: auto;
             margin-right: 8px;
+        }
+
+        #theme-toggle {
+            border-color: var(--bs-border-color);
+            color: var(--bs-body-color);
+        }
+
+        #theme-toggle:hover {
+            background-color: var(--bs-dropdown-link-hover-bg);
         }
 
         /* Tables */
@@ -172,25 +237,30 @@
             color: var(--bs-body-color);
         }
 
-        /* Custom styling for header sections */
-        .latest-news-header, .statistics-header {
-            background-color: #d4b106 !important;
-            color: #000 !important;
-            padding: 10px 15px;
-            font-weight: bold;
+        /* Compact news items */
+        .news-item-compact {
+            padding: 0.5rem 0;
+            border-bottom: 1px solid var(--bs-border-color);
         }
 
-        /* Button styling */
-        .btn-purple {
-            background-color: #d4b106;
-            border-color: #d4b106;
-            color: #000;
+        .news-item-compact:last-child {
+            border-bottom: none;
         }
 
-        .btn-purple:hover, .btn-purple:focus {
-            background-color: #b39205;
-            border-color: #b39205;
-            color: #000;
+        .news-title {
+            font-size: 1rem;
+            font-weight: 500;
+            line-height: 1.4;
+        }
+
+        .news-meta {
+            margin-top: 0.25rem;
+            font-size: 0.75rem;
+        }
+
+        .preference-tag {
+            color: var(--bs-primary);
+            font-weight: 500;
         }
 
         /* Scrollbar customization */
@@ -249,6 +319,13 @@
                         <a class="nav-link" href="/search">Search</a>
                     </li>
                 </ul>
+                <ul class="navbar-nav ms-auto">
+                    <li class="nav-item">
+                        <button id="theme-toggle" class="btn btn-sm btn-outline-secondary" title="Toggle theme">
+                            <span id="theme-icon">🌙</span>
+                        </button>
+                    </li>
+                </ul>
             </div>
         </div>
     </nav>
@@ -258,8 +335,17 @@
     </div>
 
     <footer class="footer mt-5 py-3">
-        <div class="container text-center">
-            <span class="text-muted"><a href="https://github.com/cgast/embird">EmBird</a></span>
+        <div class="container">
+            <div class="row">
+                <div class="col text-center">
+                    <span class="text-muted small">Latest News (Last 24 Hours) - Sorted by preference vector relevance</span>
+                </div>
+            </div>
+            <div class="row mt-2">
+                <div class="col text-center">
+                    <span class="text-muted"><a href="https://github.com/cgast/embird">EmBird</a></span>
+                </div>
+            </div>
         </div>
     </footer>
 

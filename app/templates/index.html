@@ -4,65 +4,35 @@
 
 {% block content %}
 
-<div class="row mb-4">
-    <div class="col">
-        <h1>Latest News (Last 24 Hours)</h1>
-        <p class="lead">Sorted by preference vector relevance</p>
-    </div>
-</div>
-
 <div class="row">
     <div class="col">
         {% if scored_items %}
             {% for scored in scored_items %}
-            <div class="card mb-4">
-                <div class="card-body">
-                    <div class="row">
-                        <div class="col">
-                            <h4><a href="/news/{{ scored.item.id }}">{{ scored.item.title }}</a></h4>
-                            <div class="text-muted small">{{ scored.item.first_seen_at.strftime('%Y-%m-%d %H:%M') }} - {{ scored.item.source_url }}</div>
-                            
-                            {% if scored.top_vectors %}
-                            <div class="mt-3">
-                                <h6>Matching Preferences:</h6>
-                                <div class="row">
-                                    {% for match in scored.top_vectors %}
-                                    <div class="col-md-4 mb-2">
-                                        <div class="d-flex align-items-center">
-                                            <div class="me-2">
-                                                <div class="badge bg-primary">{{ "%.2f"|format(match.score) }}</div>
-                                            </div>
-                                            <div>{{ match.vector.title }}</div>
-                                        </div>
-                                    </div>
-                                    {% endfor %}
-                                </div>
-                            </div>
-                            {% endif %}
-                        </div>
-                    </div>
+            <div class="news-item-compact mb-3">
+                <div class="news-title">
+                    <a href="/news/{{ scored.item.id }}">{{ scored.item.title }}</a>
+                </div>
+                <div class="news-meta text-muted small">
+                    {{ scored.item.first_seen_at.strftime('%Y-%m-%d %H:%M') }} - {{ scored.item.source_url }}
+                    {% if scored.top_vectors %}
+                        {% set high_score_vectors = scored.top_vectors | selectattr('score', '>', 0.4) | list %}
+                        {% if high_score_vectors %}
+                            - <span class="preferences-inline">
+                            {% for match in high_score_vectors %}
+                                <span class="preference-tag">{{ match.vector.title }} ({{ "%.2f"|format(match.score) }})</span>{% if not loop.last %}, {% endif %}
+                            {% endfor %}
+                            </span>
+                        {% endif %}
+                    {% endif %}
                 </div>
             </div>
             {% endfor %}
-            <div class="text-end">
-                <a href="/news" class="btn btn-primary">View All News</a>
+            <div class="text-end mt-4">
+                <a href="/news" class="btn btn-primary btn-sm">View All News</a>
             </div>
         {% else %}
             <p class="text-muted">No news items available from the last 24 hours. Add some URLs to crawl.</p>
         {% endif %}
-    </div>
-</div>
-
-<div class="row mt-4">
-    <div class="col">
-        <div class="card">
-            <div class="card-header bg-info text-white">
-                <h5 class="card-title mb-0">Statistics</h5>
-            </div>
-            <div class="card-body">
-                <p><strong>Total News Items:</strong> {{ total_news }} // <strong>Monitored URLs:</strong> {{ urls|length }}</p>
-            </div>
-        </div>
     </div>
 </div>
 
