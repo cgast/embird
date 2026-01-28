@@ -40,14 +40,18 @@ RUN npm run build
 # Stage 3: Production with nginx
 FROM nginx:alpine AS production
 
-# Copy custom nginx config
-COPY nginx.conf /etc/nginx/conf.d/default.conf
+# Copy nginx config template
+COPY nginx.conf.template /etc/nginx/templates/default.conf.template
 
 # Copy built files from build stage
 COPY --from=build /app/dist /usr/share/nginx/html
 
+# Set default environment variables
+ENV API_BACKEND_URL=http://webapp:8000
+ENV API_BACKEND_HOST=webapp
+
 # Expose port 80
 EXPOSE 80
 
-# Start nginx
+# Start nginx (nginx will automatically process templates in /etc/nginx/templates/)
 CMD ["nginx", "-g", "daemon off;"]
