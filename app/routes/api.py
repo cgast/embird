@@ -29,6 +29,11 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["api"])
 
+@router.get("/health")
+async def health_check():
+    """Health check endpoint for container orchestration."""
+    return {"status": "healthy"}
+
 @router.get("/news/umap", response_model=List[dict])
 async def get_news_umap(db: AsyncSession = Depends(get_db)):
     """Get UMAP visualization data for news items."""
