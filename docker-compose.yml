@@ -1,5 +1,15 @@
 services:
 
+  # Frontend - Vue.js application (production build with nginx)
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      target: production
+    restart: unless-stopped
+    depends_on:
+      - webapp
+
   # Web frontend and API service
   webapp:
     build:

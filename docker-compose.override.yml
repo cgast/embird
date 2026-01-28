@@ -1,5 +1,28 @@
+# Docker Compose override for local development
+# This file is automatically applied when running `docker compose up`
+# For production, use: docker compose -f docker-compose.yml up
 
 services:
+  # Frontend - Development mode with hot-reload
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      target: development
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules  # Prevent overwriting node_modules
+    environment:
+      - NODE_ENV=development
+    command: npm run dev -- --host 0.0.0.0
+
+  # Backend - Expose port for local access
   webapp:
     ports:
       - "8000:8000"
+    volumes:
+      - ./app:/app/app  # Mount source code for hot-reload (if using --reload)
+    environment:
+      - DEBUG=true

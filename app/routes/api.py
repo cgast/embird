@@ -18,6 +18,7 @@ from app.models.news import (
     NewsClusters, NewsUMAP,
     NewsClustersResponse, NewsUMAPResponse
 )
+from app.models.preference_vector import PreferenceVector, PreferenceVectorCreate, PreferenceVectorResponse
 from app.services.db import get_db, url_db
 from app.services.embedding import get_embedding_service, EmbeddingService
 from app.services.visualization import generate_clusters, generate_umap_visualization
@@ -341,8 +342,121 @@ async def get_news_item(news_id: int, db: AsyncSession = Depends(get_db)):
     """Get a news item by ID."""
     result = await db.execute(select(NewsItem).filter(NewsItem.id == news_id))
     news_item = result.scalars().first()
-    
+
     if not news_item:
         raise HTTPException(status_code=404, detail="News item not found")
-    
+
     return news_item
+
+# ---- Preference Vector Endpoints ----
+
+@router.get("/preference-vectors", response_model=List[PreferenceVectorResponse])
+async def get_preference_vectors(db: AsyncSession = Depends(get_db)):
+    """Get all preference vectors."""
+    if not settings.ENABLE_PREFERENCE_VECTORS:
+        raise HTTPException(status_code=403, detail="Preference vector management is disabled")
+
+    result = await db.execute(select(PreferenceVector))
+    vectors = result.scalars().all()
+    return vectors
+
+@router.post("/preference-vectors", response_model=PreferenceVectorResponse)
+async def create_preference_vector(
+    vector_data: PreferenceVectorCreate,
+    db: AsyncSession = Depends(get_db),
+    embedding_service: EmbeddingService = Depends(get_embedding_service)
+):
+    """Create a new preference vector."""
+    if not settings.ENABLE_PREFERENCE_VECTORS:
+        raise HTTPException(status_code=403, detail="Preference vector management is disabled")
+
+    try:
+        # Generate embedding from description
+        embedding = await embedding_service.get_embedding(vector_data.description)
+
+        if not embedding:
+            raise HTTPException(status_code=422, detail="Failed to generate embedding")
+
+        # Create vector
+        vector = PreferenceVector(
+            title=vector_data.title,
+            description=vector_data.description,
+            embedding=embedding
+        )
+
+        db.add(vector)
+        await db.commit()
+        await db.refresh(vector)
+
+        # Update visualizations after adding new preference vector
+        await generate_clusters(db)
+        await generate_umap_visualization(db)
+
+        return vector
+
+    except Exception as e:
+        logging.error(f"Error creating preference vector: {str(e)}")
+        raise HTTPException(status_code=422, detail=str(e))
+
+@router.put("/preference-vectors/{vector_id}", response_model=PreferenceVectorResponse)
+async def update_preference_vector(
+    vector_id: int,
+    vector_data: PreferenceVectorCreate,
+    db: AsyncSession = Depends(get_db),
+    embedding_service: EmbeddingService = Depends(get_embedding_service)
+):
+    """Update a preference vector."""
+    if not settings.ENABLE_PREFERENCE_VECTORS:
+        raise HTTPException(status_code=403, detail="Preference vector management is disabled")
+
+    try:
+        result = await db.execute(select(PreferenceVector).filter(PreferenceVector.id == vector_id))
+        vector = result.scalars().first()
+
+        if not vector:
+            raise HTTPException(status_code=404, detail="Preference vector not found")
+
+        # Generate new embedding
+        embedding = await embedding_service.get_embedding(vector_data.description)
+
+        if not embedding:
+            raise HTTPException(status_code=422, detail="Failed to generate embedding")
+
+        # Update vector
+        vector.title = vector_data.title
+        vector.description = vector_data.description
+        vector.embedding = embedding
+
+        await db.commit()
+        await db.refresh(vector)
+
+        # Update visualizations after modifying preference vector
+        await generate_clusters(db)
+        await generate_umap_visualization(db)
+
+        return vector
+
+    except Exception as e:
+        logging.error(f"Error updating preference vector: {str(e)}")
+        raise HTTPException(status_code=422, detail=str(e))
+
+@router.delete("/preference-vectors/{vector_id}", response_model=bool)
+async def delete_preference_vector(vector_id: int, db: AsyncSession = Depends(get_db)):
+    """Delete a preference vector."""
+    if not settings.ENABLE_PREFERENCE_VECTORS:
+        raise HTTPException(status_code=403, detail="Preference vector management is disabled")
+
+    result = await db.execute(select(PreferenceVector).filter(PreferenceVector.id == vector_id))
+    vector = result.scalars().first()
+
+    if not vector:
+        raise HTTPException(status_code=404, detail="Preference vector not found")
+
+    await db.delete(vector)
+    await db.commit()
+
+    # Update visualizations after deleting preference vector
+    await generate_clusters(db)
+    await generate_umap_visualization(db)
+
+    return True

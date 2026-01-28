@@ -1,0 +1,16 @@
+# Production Docker Compose configuration
+# Use with: docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+
+services:
+  # Frontend - Production build with nginx
+  frontend:
+    ports:
+      - "80:80"
+    environment:
+      - NODE_ENV=production
+
+  # Backend - Production configuration
+  webapp:
+    environment:
+      - DEBUG=false
+      - LOG_LEVEL=info

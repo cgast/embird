@@ -22,12 +22,13 @@ An open-source project for crawling RSS feeds and websites, extracting news cont
 
 ## Architecture
 
-The system consists of four main components:
+The system consists of five main components:
 
-1. **Web App**: FastAPI backend with Jinja2 templates for the frontend
-2. **Crawler Service**: Python service that runs periodically to fetch and process content
-3. **Embedding Worker**: Dedicated service for managing vector embeddings and similarity computations
-4. **Databases**:
+1. **Frontend**: Modern Vue.js + Vite application with responsive design and dark/light theme
+2. **Web App**: FastAPI backend providing REST API endpoints
+3. **Crawler Service**: Python service that runs periodically to fetch and process content
+4. **Embedding Worker**: Dedicated service for managing vector embeddings and similarity computations
+5. **Databases**:
    - PostgreSQL with pgvector extension for news items and metadata
    - FAISS for high-performance vector similarity search and clustering
 
@@ -46,29 +47,52 @@ The system uses FAISS (Facebook AI Similarity Search) for efficient vector opera
 - Docker and Docker Compose
 - Cohere API key (for generating embeddings)
 
-### Installation
+### Quick Start with Docker Compose
 
-#### Clone the repository
+#### 1. Clone the repository
 
 ```bash
 git clone https://github.com/cgast/embird.git
 cd embird
 ```
 
-#### Create a `.env` file with your Cohere API key
+#### 2. Create a `.env` file with your Cohere API key
 
 ```bash
 cp .env.example .env
 # Edit .env and add your COHERE_API_KEY
 ```
 
-#### Start the application
+#### 3. Choose your deployment mode
+
+**For Local Development (with hot-reload):**
 
 ```bash
-docker-compose up -d
+docker compose up -d
 ```
 
-#### Access the web interface at [http://localhost:8000](http://localhost:8000)
+This uses `docker-compose.override.yml` automatically, providing:
+- Frontend dev server with hot-reload on port 5173
+- Backend API on port 8000
+- Source code mounted for live updates
+
+Access the application at:
+- Frontend: [http://localhost:5173](http://localhost:5173)
+- Backend API: [http://localhost:8000/api](http://localhost:8000/api)
+
+**For Production:**
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+```
+
+This provides:
+- Optimized Vue build served by nginx on port 80
+- Backend API proxied through nginx
+- No source code mounting, secure setup
+
+Access the application at:
+- Application: [http://localhost](http://localhost)
 
 ### Usage
 
@@ -83,42 +107,79 @@ docker-compose up -d
 ### Project Structure
 
 ```
-app/
-├── models/          # Database models
-├── routes/          # API and web routes
-├── services/        # Core services
-│   ├── crawler.py   # URL crawling and content extraction
-│   ├── embedding_worker.py  # Vector embedding service
-│   ├── faiss_service.py    # Vector similarity operations
-│   └── visualization.py    # UMAP and clustering visualizations
-├── templates/       # Jinja2 HTML templates
-└── static/         # CSS, JavaScript, and other static files
+embird/
+├── frontend/               # Vue.js frontend application
+│   ├── src/
+│   │   ├── components/    # Reusable Vue components
+│   │   ├── views/         # Page components
+│   │   ├── App.vue        # Root component
+│   │   ├── main.js        # Entry point
+│   │   └── style.css      # Global styles
+│   ├── Dockerfile         # Multi-stage build
+│   └── nginx.conf         # Production nginx config
+├── app/                   # Backend application
+│   ├── models/            # Database models
+│   ├── routes/            # API and web routes
+│   ├── services/          # Core services
+│   │   ├── crawler.py     # URL crawling and content extraction
+│   │   ├── embedding_worker.py  # Vector embedding service
+│   │   ├── faiss_service.py    # Vector similarity operations
+│   │   └── visualization.py    # UMAP and clustering visualizations
+│   └── static/            # Legacy static files (for old templates)
+├── docker-compose.yml           # Base compose file (production)
+├── docker-compose.override.yml  # Development overrides (auto-applied)
+└── docker-compose.prod.yml      # Production-specific config
 ```
 
-### Local Development
+### Docker Compose Development Workflow
 
-To run the services individually for development:
+The recommended way to develop is using Docker Compose with hot-reload:
 
-#### Set up a virtual environment and install dependencies
+```bash
+# Start all services in development mode
+docker compose up -d
+
+# View logs
+docker compose logs -f frontend
+docker compose logs -f webapp
+
+# Rebuild after dependency changes
+docker compose build frontend
+docker compose up -d frontend
+
+# Stop all services
+docker compose down
+```
+
+**What you get:**
+
+- Frontend hot-reload: Edit Vue files and see changes instantly
+- Backend auto-reload: Changes to Python files restart the server
+- Full database and services running
+- No need to install Node.js or Python locally
+
+### Manual Development (without Docker)
+
+If you prefer to run services individually:
+
+**Backend:**
 
 ```bash
 python -m venv venv
 source venv/bin/activate  # On Windows: venv\Scripts\activate
 pip install -r requirements.txt
+uvicorn app.main:app --reload
 ```
 
-#### Start the services
+**Frontend:**
 
 ```bash
-# Start the web app
-uvicorn app.main:app --reload
-
-# In another terminal, start the embedding worker
-python -m app.services.embedding_worker
-
-# Run the crawler manually when needed
-python -m app.crawler_service
+cd frontend
+npm install
+npm run dev
 ```
+
+**Note:** You'll still need PostgreSQL and other services running (can use Docker for just the database).
 
 ## Configuration
 
