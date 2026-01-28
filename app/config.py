@@ -8,6 +8,7 @@ class Settings(BaseSettings):
     DEBUG: bool = os.environ.get("DEBUG", "False").lower() in ("true", "1", "t")
     ENABLE_URL_MANAGEMENT: bool = os.environ.get("ENABLE_URL_MANAGEMENT", "True").lower() in ("true", "1", "t")
     ENABLE_PREFERENCE_MANAGEMENT: bool = os.environ.get("ENABLE_PREFERENCE_MANAGEMENT", "True").lower() in ("true", "1", "t")
+    ENABLE_PREFERENCE_VECTORS: bool = os.environ.get("ENABLE_PREFERENCE_VECTORS", "True").lower() in ("true", "1", "t")
     
     # Database
     DATABASE_URL: str = os.environ.get("DATABASE_URL", "postgresql://postgres:postgres@postgres:5432/newsdb")

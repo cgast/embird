@@ -328,7 +328,7 @@ async def get_trending_news(
 ):
     """Get trending news items based on hit count in a time period."""
     # Get current time minus specified hours
-    time_filter = func.now() - func.make_interval(hours=hours)
+    time_filter = func.now() - func.make_interval(0, 0, 0, 0, 0, 0, hours)
     
     query = select(NewsItem).filter(
         NewsItem.last_seen_at >= time_filter
