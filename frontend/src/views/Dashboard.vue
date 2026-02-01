@@ -100,36 +100,37 @@ onMounted(() => {
 }
 
 .stats-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: 1rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
   margin-bottom: 2rem;
 }
 
 .stat-card {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
   background: var(--surface-color);
   border: 1px solid var(--border-color);
-  border-radius: 8px;
-  padding: 1.5rem;
-  text-align: center;
+  border-radius: 6px;
+  padding: 0.5rem 0.75rem;
   box-shadow: var(--shadow);
   transition: all 0.2s ease;
 }
 
 .stat-card:hover {
   box-shadow: var(--shadow-hover);
-  transform: translateY(-2px);
+  border-color: var(--primary-color);
 }
 
 .stat-value {
-  font-size: 2.5rem;
+  font-size: 1rem;
   font-weight: 700;
   color: var(--primary-color);
-  margin-bottom: 0.5rem;
 }
 
 .stat-label {
-  font-size: 0.875rem;
+  font-size: 0.75rem;
   color: var(--text-muted);
   text-transform: uppercase;
   letter-spacing: 0.5px;
@@ -152,14 +153,6 @@ onMounted(() => {
 @media (max-width: 768px) {
   .dashboard-header h1 {
     font-size: 1.5rem;
-  }
-
-  .stats-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .stat-value {
-    font-size: 2rem;
   }
 }
 </style>

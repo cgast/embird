@@ -51,7 +51,7 @@ async def get_news_umap(db: AsyncSession = Depends(get_db)):
             return umap_data.visualization
         
         # If no pre-generated data, generate it now
-        return await generate_umap_visualization(db)
+        return await generate_umap_visualization(db, settings.VISUALIZATION_TIME_RANGE, settings.VISUALIZATION_SIMILARITY)
         
     except Exception as e:
         logging.error(f"UMAP visualization error: {str(e)}")
@@ -242,7 +242,7 @@ async def get_news_clusters(db: AsyncSession = Depends(get_db)):
             cluster_data = clusters.clusters
         else:
             # If no pre-generated clusters, generate them now
-            cluster_data = await generate_clusters(db)
+            cluster_data = await generate_clusters(db, settings.VISUALIZATION_TIME_RANGE, settings.VISUALIZATION_SIMILARITY)
             
             # Store the newly generated clusters in the database
             new_clusters = NewsClusters(
@@ -395,8 +395,8 @@ async def create_preference_vector(
         await db.refresh(vector)
 
         # Update visualizations after adding new preference vector
-        await generate_clusters(db)
-        await generate_umap_visualization(db)
+        await generate_clusters(db, settings.VISUALIZATION_TIME_RANGE, settings.VISUALIZATION_SIMILARITY)
+        await generate_umap_visualization(db, settings.VISUALIZATION_TIME_RANGE, settings.VISUALIZATION_SIMILARITY)
 
         return vector
 
@@ -437,8 +437,8 @@ async def update_preference_vector(
         await db.refresh(vector)
 
         # Update visualizations after modifying preference vector
-        await generate_clusters(db)
-        await generate_umap_visualization(db)
+        await generate_clusters(db, settings.VISUALIZATION_TIME_RANGE, settings.VISUALIZATION_SIMILARITY)
+        await generate_umap_visualization(db, settings.VISUALIZATION_TIME_RANGE, settings.VISUALIZATION_SIMILARITY)
 
         return vector
 
@@ -462,7 +462,7 @@ async def delete_preference_vector(vector_id: int, db: AsyncSession = Depends(ge
     await db.commit()
 
     # Update visualizations after deleting preference vector
-    await generate_clusters(db)
-    await generate_umap_visualization(db)
+    await generate_clusters(db, settings.VISUALIZATION_TIME_RANGE, settings.VISUALIZATION_SIMILARITY)
+    await generate_umap_visualization(db, settings.VISUALIZATION_TIME_RANGE, settings.VISUALIZATION_SIMILARITY)
 
     return True
