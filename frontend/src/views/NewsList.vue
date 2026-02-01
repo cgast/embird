@@ -51,15 +51,19 @@ const filterBySource = (source) => {
   }
 }
 
-// Watch for query parameter changes
-watch(() => route.query.source_url, (newSource) => {
-  sourceFilter.value = newSource || ''
-  fetchNews()
-}, { immediate: true })
-
+// Initialize source filter from URL on mount
 onMounted(() => {
   sourceFilter.value = route.query.source_url || ''
   fetchNews()
+})
+
+// Watch for query parameter changes (after initial mount)
+watch(() => route.query.source_url, (newSource, oldSource) => {
+  // Only refetch if the source actually changed (not on initial mount)
+  if (oldSource !== undefined) {
+    sourceFilter.value = newSource || ''
+    fetchNews()
+  }
 })
 </script>
 

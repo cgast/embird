@@ -137,16 +137,23 @@ const toggleMobileMenu = () => {
   padding: 0.5rem;
 }
 
+.navbar-menu {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
 @media (max-width: 768px) {
   .mobile-menu-btn {
     display: block;
   }
 
   .desktop-menu {
-    display: none;
+    display: none !important;
   }
 
   .mobile-menu {
+    display: flex;
     position: absolute;
     top: 100%;
     left: 0;
@@ -166,14 +173,8 @@ const toggleMobileMenu = () => {
 
 @media (min-width: 769px) {
   .mobile-menu {
-    display: none;
+    display: none !important;
   }
-}
-
-.navbar-menu {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
 }
 
 .navbar-menu a {
