@@ -225,9 +225,19 @@ async def search_news(
         logging.error(f"Search error: {str(e)}")
         raise HTTPException(status_code=422, detail=str(e))
 
-@router.get("/news/clusters", response_model=Dict[str, List[Dict]])
+@router.get("/news/clusters", response_model=Dict[str, Dict])
 async def get_news_clusters(db: AsyncSession = Depends(get_db)):
-    """Get clustered news items based on vector similarity."""
+    """Get clustered news items based on vector similarity.
+
+    Returns:
+        Dictionary mapping cluster_id to cluster data:
+        {
+            "cluster_id": {
+                "name": "keyword1, keyword2, keyword3",
+                "articles": [list of article dicts]
+            }
+        }
+    """
     try:
         # Try to get pre-generated clusters
         result = await db.execute(
@@ -237,13 +247,13 @@ async def get_news_clusters(db: AsyncSession = Depends(get_db)):
             ).order_by(NewsClusters.created_at.desc())
         )
         clusters = result.scalars().first()
-        
+
         if clusters:
             cluster_data = clusters.clusters
         else:
             # If no pre-generated clusters, generate them now
             cluster_data = await generate_clusters(db, settings.VISUALIZATION_TIME_RANGE, settings.VISUALIZATION_SIMILARITY)
-            
+
             # Store the newly generated clusters in the database
             new_clusters = NewsClusters(
                 hours=settings.VISUALIZATION_TIME_RANGE,
@@ -252,10 +262,19 @@ async def get_news_clusters(db: AsyncSession = Depends(get_db)):
             )
             db.add(new_clusters)
             await db.commit()
-        
+
         # Convert to dictionary with string keys and serialized items
         serialized_clusters = {}
-        for cluster_id, items in cluster_data.items():
+        for cluster_id, cluster_info in cluster_data.items():
+            # Handle both old format (list of items) and new format (dict with 'name' and 'articles')
+            if isinstance(cluster_info, dict) and 'articles' in cluster_info:
+                cluster_name = cluster_info.get('name', f'Cluster {cluster_id}')
+                items = cluster_info['articles']
+            else:
+                # Old format: cluster_info is a list of items
+                cluster_name = f'Cluster {cluster_id}'
+                items = cluster_info
+
             serialized_items = []
             for item in items:
                 # Handle both dictionaries and objects
@@ -270,26 +289,26 @@ async def get_news_clusters(db: AsyncSession = Depends(get_db)):
                         'similarity': item.get('similarity', 0.0),
                         'hit_count': item.get('hit_count', 1),
                     }
-                    
+
                     # Handle datetime fields carefully
                     first_seen = item.get('first_seen_at')
                     if first_seen:
                         item_dict['first_seen_at'] = first_seen.isoformat() if hasattr(first_seen, 'isoformat') else first_seen
                     else:
                         item_dict['first_seen_at'] = datetime.now().isoformat()
-                        
+
                     last_seen = item.get('last_seen_at')
                     if last_seen:
                         item_dict['last_seen_at'] = last_seen.isoformat() if hasattr(last_seen, 'isoformat') else last_seen
                     else:
                         item_dict['last_seen_at'] = datetime.now().isoformat()
-                        
+
                     created_at = item.get('created_at')
                     if created_at:
                         item_dict['created_at'] = created_at.isoformat() if hasattr(created_at, 'isoformat') else created_at
                     else:
                         item_dict['created_at'] = datetime.now().isoformat()
-                        
+
                     updated_at = item.get('updated_at')
                     if updated_at:
                         item_dict['updated_at'] = updated_at.isoformat() if hasattr(updated_at, 'isoformat') else updated_at
@@ -310,12 +329,15 @@ async def get_news_clusters(db: AsyncSession = Depends(get_db)):
                         'updated_at': item.updated_at.isoformat() if hasattr(item.updated_at, 'isoformat') else item.updated_at
                     }
                 serialized_items.append(item_dict)
-            
+
             # Convert numeric cluster_id to string for JSON compatibility
-            serialized_clusters[str(cluster_id)] = serialized_items
-            
+            serialized_clusters[str(cluster_id)] = {
+                'name': cluster_name,
+                'articles': serialized_items
+            }
+
         return serialized_clusters
-        
+
     except Exception as e:
         logging.error(f"Clustering error: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))

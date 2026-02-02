@@ -3,6 +3,8 @@ from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Optional, Tuple
 import logging
 import traceback
+import re
+from collections import Counter
 import umap
 import numpy as np
 from sqlalchemy import select, text, update, func
@@ -15,36 +17,163 @@ from app.config import settings
 
 logger = logging.getLogger(__name__)
 
-async def generate_clusters(db: AsyncSession, hours: int, min_similarity: float) -> Dict[int, List[dict]]:
-    """Generate news clusters using FAISS vector similarity."""
+# Common stop words to filter out from keywords
+STOP_WORDS = {
+    'a', 'an', 'and', 'are', 'as', 'at', 'be', 'by', 'for', 'from', 'has', 'he',
+    'in', 'is', 'it', 'its', 'of', 'on', 'that', 'the', 'to', 'was', 'were',
+    'will', 'with', 'the', 'this', 'but', 'they', 'have', 'had', 'what', 'when',
+    'where', 'who', 'which', 'why', 'how', 'all', 'each', 'every', 'both', 'few',
+    'more', 'most', 'other', 'some', 'such', 'no', 'nor', 'not', 'only', 'own',
+    'same', 'so', 'than', 'too', 'very', 'just', 'can', 'could', 'may', 'might',
+    'must', 'shall', 'should', 'would', 'now', 'also', 'into', 'over', 'after',
+    'before', 'between', 'under', 'again', 'further', 'then', 'once', 'here',
+    'there', 'when', 'where', 'why', 'how', 'any', 'been', 'being', 'do', 'does',
+    'did', 'doing', 'about', 'against', 'up', 'down', 'out', 'off', 'through',
+    'during', 'while', 'above', 'below', 'their', 'them', 'these', 'those', 'his',
+    'her', 'him', 'she', 'he', 'we', 'you', 'your', 'our', 'my', 'me', 'i', 'us',
+    'says', 'said', 'new', 'news', 'report', 'reports', 'according', 'like',
+    'get', 'gets', 'got', 'make', 'makes', 'made', 'one', 'two', 'three', 'first',
+    'year', 'years', 'day', 'days', 'week', 'weeks', 'month', 'months', 'time',
+    'way', 'even', 'well', 'back', 'much', 'still', 'many', 'last', 'take', 'see',
+    'come', 'use', 'used', 'using', 'go', 'know', 'need', 'want', 'look', 'think',
+    'right', 'old', 'going', 'good', 'great', 'big', 'long', 'little', 'own', 'set',
+    'put', 'end', 'another', 'best', 'worst', 'top', 'high', 'low', 'part', 'full',
+    'early', 'late', 'say', 'latest', 'breaking', 'live', 'update', 'updates'
+}
+
+
+def extract_cluster_keywords(articles: List[dict], num_keywords: int = 4) -> str:
+    """
+    Extract representative keywords from a cluster of articles.
+
+    Uses a simplified TF-IDF approach to find distinctive terms:
+    - Extracts words from titles and summaries
+    - Filters stop words and short terms
+    - Weights title words higher than summary words
+    - Returns top keywords joined with commas
+
+    Args:
+        articles: List of article dictionaries with 'title' and 'summary' fields
+        num_keywords: Number of keywords to extract (default 4)
+
+    Returns:
+        Comma-separated string of keywords (e.g., "AI, technology, OpenAI, regulation")
+    """
+    if not articles:
+        return "Uncategorized"
+
+    word_scores = Counter()
+
+    # Weight for title vs summary words
+    TITLE_WEIGHT = 3.0
+    SUMMARY_WEIGHT = 1.0
+
+    for article in articles:
+        title = article.get('title', '') or ''
+        summary = article.get('summary', '') or ''
+
+        # Extract and score title words (higher weight)
+        title_words = _tokenize(title)
+        for word in title_words:
+            word_scores[word] += TITLE_WEIGHT
+
+        # Extract and score summary words (lower weight)
+        summary_words = _tokenize(summary)
+        for word in summary_words:
+            word_scores[word] += SUMMARY_WEIGHT
+
+    if not word_scores:
+        return "Uncategorized"
+
+    # Get top keywords, avoiding duplicates and substrings
+    top_words = []
+    for word, _ in word_scores.most_common(num_keywords * 3):
+        # Skip if this word is a substring of an existing keyword or vice versa
+        is_redundant = False
+        for existing in top_words:
+            if word in existing or existing in word:
+                is_redundant = True
+                break
+
+        if not is_redundant:
+            # Capitalize for display
+            top_words.append(word.capitalize())
+
+        if len(top_words) >= num_keywords:
+            break
+
+    if not top_words:
+        return "Uncategorized"
+
+    return ", ".join(top_words)
+
+
+def _tokenize(text: str) -> List[str]:
+    """
+    Tokenize text into words, filtering stop words and short terms.
+
+    Args:
+        text: Input text to tokenize
+
+    Returns:
+        List of filtered word tokens
+    """
+    if not text:
+        return []
+
+    # Convert to lowercase and extract words
+    text = text.lower()
+    # Match words with at least 2 characters (letters only)
+    words = re.findall(r'\b[a-z]{3,}\b', text)
+
+    # Filter out stop words and very common terms
+    filtered = [
+        word for word in words
+        if word not in STOP_WORDS and len(word) >= 3
+    ]
+
+    return filtered
+
+async def generate_clusters(db: AsyncSession, hours: int, min_similarity: float) -> Dict[int, dict]:
+    """Generate news clusters using FAISS vector similarity.
+
+    Returns:
+        Dictionary mapping cluster_id to cluster data with structure:
+        {
+            cluster_id: {
+                "name": "keyword1, keyword2, keyword3",
+                "articles": [list of article dicts]
+            }
+        }
+    """
     try:
         # Get FAISS service
         faiss_service = get_faiss_service()
-        
+
         # Generate clusters using FAISS
         clusters = await faiss_service.get_clusters(db, hours, min_similarity)
-        
+
         if not clusters:
             logger.warning("No clusters found")
             return {}
-            
+
         # Enrich cluster data with additional news item details from database
-        enriched_clusters: Dict[int, List[dict]] = {}
-        
+        enriched_clusters: Dict[int, dict] = {}
+
         for cluster_id, items in clusters.items():
             try:
                 # Get all news IDs in this cluster
                 news_ids = [item['id'] for item in items]
-                
+
                 # Get full news items from database
                 stmt = select(NewsItem).filter(NewsItem.id.in_(news_ids))
                 result = await db.execute(stmt)
                 news_items = {item.id: item for item in result.scalars().all()}
-                
+
                 if not news_items:
                     logger.warning(f"No news items found for cluster {cluster_id}")
                     continue
-                
+
                 # Create enriched items
                 enriched_items = []
                 for item in items:
@@ -64,17 +193,22 @@ async def generate_clusters(db: AsyncSession, hours: int, min_similarity: float)
                             "similarity": item['similarity'],
                             "cluster_id": cluster_id
                         })
-                
+
                 if enriched_items:
-                    enriched_clusters[cluster_id] = enriched_items
-                    
+                    # Generate cluster name from keywords
+                    cluster_name = extract_cluster_keywords(enriched_items)
+                    enriched_clusters[cluster_id] = {
+                        "name": cluster_name,
+                        "articles": enriched_items
+                    }
+
             except Exception as e:
                 logger.error(f"Error enriching cluster {cluster_id}: {str(e)}\n{traceback.format_exc()}")
                 continue
-        
+
         logger.info(f"Generated {len(enriched_clusters)} enriched clusters")
         return enriched_clusters
-        
+
     except Exception as e:
         logger.error(f"Clustering error: {str(e)}\n{traceback.format_exc()}")
         raise
@@ -84,11 +218,13 @@ async def generate_umap_visualization(db: AsyncSession, hours: int, min_similari
     try:
         # First generate clusters to get cluster assignments
         clusters = await generate_clusters(db, hours, min_similarity)
-        
+
         # Create a mapping of news item ID to cluster ID
         item_to_cluster = {}
-        for cluster_id, items in clusters.items():
-            for item in items:
+        for cluster_id, cluster_data in clusters.items():
+            # Handle both old format (list) and new format (dict with 'articles' key)
+            articles = cluster_data.get('articles', cluster_data) if isinstance(cluster_data, dict) else cluster_data
+            for item in articles:
                 item_to_cluster[item['id']] = cluster_id
 
         # Get news items from the last n hours - use timezone-aware UTC time
