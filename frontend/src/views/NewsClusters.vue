@@ -44,11 +44,35 @@ const goToArticle = (id) => {
   router.push(`/news/${id}`)
 }
 
+// Get cluster name (supports both old and new API format)
+const getClusterName = (clusterId) => {
+  const cluster = clusters.value[clusterId]
+  if (cluster && cluster.name) {
+    return cluster.name
+  }
+  return `Cluster ${clusterId}`
+}
+
+// Get articles from cluster (supports both old and new API format)
+const getClusterArticles = (clusterId) => {
+  const cluster = clusters.value[clusterId]
+  if (cluster && cluster.articles) {
+    return cluster.articles
+  }
+  // Old format: cluster is directly an array of articles
+  return Array.isArray(cluster) ? cluster : []
+}
+
 const clusterKeys = ref([])
 
 onMounted(async () => {
   await fetchClusters()
-  clusterKeys.value = Object.keys(clusters.value).sort((a, b) => b - a)
+  // Sort clusters by number of articles (descending)
+  clusterKeys.value = Object.keys(clusters.value).sort((a, b) => {
+    const aCount = getClusterArticles(a).length
+    const bCount = getClusterArticles(b).length
+    return bCount - aCount
+  })
 })
 </script>
 
@@ -82,13 +106,13 @@ onMounted(async () => {
         class="cluster"
       >
         <div class="cluster-header">
-          <h2>Cluster {{ clusterId }}</h2>
-          <span class="badge">{{ clusters[clusterId].length }} article{{ clusters[clusterId].length !== 1 ? 's' : '' }}</span>
+          <h2>{{ getClusterName(clusterId) }}</h2>
+          <span class="badge">{{ getClusterArticles(clusterId).length }} article{{ getClusterArticles(clusterId).length !== 1 ? 's' : '' }}</span>
         </div>
 
         <div class="cluster-items">
           <div
-            v-for="item in clusters[clusterId]"
+            v-for="item in getClusterArticles(clusterId)"
             :key="item.id"
             class="cluster-item"
             @click="goToArticle(item.id)"
