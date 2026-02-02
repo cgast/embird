@@ -7,7 +7,8 @@ const error = ref(null)
 const showAddForm = ref(false)
 
 const newSource = ref({
-  url: ''
+  url: '',
+  type: 'rss'
 })
 
 const fetchSources = async () => {
@@ -46,7 +47,7 @@ const addSource = async () => {
       throw new Error(errorData.detail || 'Failed to add source')
     }
 
-    newSource.value = { url: '' }
+    newSource.value = { url: '', type: 'rss' }
     showAddForm.value = false
     await fetchSources()
 
@@ -115,13 +116,20 @@ onMounted(() => {
       <div v-if="showAddForm" class="card-body">
         <form @submit.prevent="addSource">
           <div class="form-group mb-3">
-            <label>RSS Feed URL</label>
+            <label>Source Type</label>
+            <select v-model="newSource.type" class="form-select">
+              <option value="rss">RSS Feed</option>
+              <option value="homepage">Homepage</option>
+            </select>
+          </div>
+          <div class="form-group mb-3">
+            <label>{{ newSource.type === 'rss' ? 'RSS Feed URL' : 'Homepage URL' }}</label>
             <input v-model="newSource.url" type="url"
-                   placeholder="https://example.com/feed.xml" required />
+                   :placeholder="newSource.type === 'rss' ? 'https://example.com/feed.xml' : 'https://example.com'" required />
           </div>
           <div class="form-actions">
             <button type="submit" class="btn btn-primary">Add Source</button>
-            <button type="button" @click="showAddForm = false; newSource = { url: '' }"
+            <button type="button" @click="showAddForm = false; newSource = { url: '', type: 'rss' }"
                     class="btn btn-outline">Cancel</button>
           </div>
         </form>
@@ -145,6 +153,7 @@ onMounted(() => {
           <div v-for="source in sources" :key="source.id" class="source-item">
             <div class="source-content">
               <h3>{{ getDomain(source.url) }}</h3>
+              <span class="source-type-badge" :class="source.type">{{ source.type === 'rss' ? 'RSS' : 'Homepage' }}</span>
               <a :href="source.url" target="_blank" rel="noopener noreferrer" class="source-url">
                 {{ source.url }}
               </a>
@@ -212,6 +221,23 @@ onMounted(() => {
   color: var(--text-color);
 }
 
+.form-select {
+  width: 100%;
+  padding: 0.75rem 1rem;
+  font-size: 1rem;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  background-color: var(--surface-color);
+  color: var(--text-color);
+  cursor: pointer;
+}
+
+.form-select:focus {
+  outline: none;
+  border-color: var(--primary-color);
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+}
+
 .form-actions {
   display: flex;
   gap: 1rem;
@@ -267,6 +293,25 @@ onMounted(() => {
   font-weight: 600;
   margin-bottom: 0.5rem;
   color: var(--text-color);
+}
+
+.source-type-badge {
+  display: inline-block;
+  padding: 0.25rem 0.5rem;
+  font-size: 0.75rem;
+  font-weight: 500;
+  border-radius: 4px;
+  margin-bottom: 0.5rem;
+}
+
+.source-type-badge.rss {
+  background-color: rgba(99, 102, 241, 0.1);
+  color: var(--primary-color);
+}
+
+.source-type-badge.homepage {
+  background-color: rgba(16, 185, 129, 0.1);
+  color: #10b981;
 }
 
 .source-url {
