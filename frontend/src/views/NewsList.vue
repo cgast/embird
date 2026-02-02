@@ -51,6 +51,16 @@ const filterBySource = (source) => {
   }
 }
 
+// Helper function to extract domain from URL
+const getDomain = (urlString) => {
+  try {
+    const url = new URL(urlString)
+    return url.hostname.replace('www.', '')
+  } catch {
+    return urlString
+  }
+}
+
 // Initialize source filter from URL on mount
 onMounted(() => {
   sourceFilter.value = route.query.source_url || ''
@@ -84,7 +94,7 @@ watch(() => route.query.source_url, (newSource, oldSource) => {
           :class="['source-tag', { active: sourceFilter === source }]"
           @click="filterBySource(source)"
         >
-          {{ new URL(source).hostname.replace('www.', '') }}
+          {{ getDomain(source) }}
         </button>
       </div>
     </div>
@@ -105,7 +115,7 @@ watch(() => route.query.source_url, (newSource, oldSource) => {
       <div class="news-count">
         <p class="text-muted">
           Showing {{ news.length }} article{{ news.length !== 1 ? 's' : '' }}
-          <span v-if="sourceFilter"> from {{ new URL(sourceFilter).hostname.replace('www.', '') }}</span>
+          <span v-if="sourceFilter"> from {{ getDomain(sourceFilter) }}</span>
         </p>
       </div>
 
