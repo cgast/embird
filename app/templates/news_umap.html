@@ -115,9 +115,18 @@ document.addEventListener('DOMContentLoaded', function() {
                 tooltip.style.display = 'block';
                 tooltip.style.left = (event.pageX + 10) + 'px';
                 tooltip.style.top = (event.pageY + 10) + 'px';
-                tooltip.querySelector('.card-title').textContent = d.title;
-                tooltip.querySelector('.card-text').textContent = new URL(d.source_url).hostname;
-                tooltip.querySelector('.cluster-info').textContent = d.cluster_id !== undefined && d.cluster_id !== null ? 
+                tooltip.querySelector('.card-title').textContent = d.title || 'Untitled';
+                // Safely extract hostname from source_url
+                let hostname = 'Unknown source';
+                if (d.source_url) {
+                    try {
+                        hostname = new URL(d.source_url).hostname.replace('www.', '');
+                    } catch (e) {
+                        hostname = d.source_url;
+                    }
+                }
+                tooltip.querySelector('.card-text').textContent = hostname;
+                tooltip.querySelector('.cluster-info').textContent = d.cluster_id !== undefined && d.cluster_id !== null ?
                     `Cluster ${d.cluster_id}` : 'Unclustered';
             })
             .on('mouseout', function() {
