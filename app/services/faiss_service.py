@@ -157,9 +157,214 @@ class FaissService:
             
             logger.info(f"Generated {len(clusters)} clusters")
             return clusters
-            
+
         except Exception as e:
             logger.error(f"Error getting clusters: {str(e)}\n{traceback.format_exc()}")
+            raise
+
+    def _create_subclusters(
+        self,
+        cluster_items: List[dict],
+        cluster_indices: List[int],
+        subcluster_similarity: float
+    ) -> List[List[dict]]:
+        """
+        Create subclusters within a large cluster using higher similarity threshold.
+
+        Args:
+            cluster_items: List of items in the cluster with 'id' and 'similarity'
+            cluster_indices: Corresponding indices in the FAISS index
+            subcluster_similarity: Higher similarity threshold for subclustering
+
+        Returns:
+            List of subclusters, each containing a list of items
+        """
+        if len(cluster_items) < 2:
+            return [cluster_items]
+
+        # Convert similarity threshold to L2 distance
+        max_l2_squared = 2 * (1 - subcluster_similarity)
+
+        # Get vectors for this cluster
+        cluster_vectors = np.array([self.vectors[idx] for idx in cluster_indices])
+
+        # Create a temporary FAISS index for this cluster
+        temp_index = faiss.IndexFlatL2(self.dimension)
+        temp_index.add(cluster_vectors)
+
+        # Map from temp index position to original item
+        temp_to_item = {i: (cluster_items[i], cluster_indices[i]) for i in range(len(cluster_items))}
+
+        subclusters = []
+        used_temp_indices = set()
+
+        for i in range(len(cluster_vectors)):
+            if i in used_temp_indices:
+                continue
+
+            # Search for similar vectors within this cluster
+            D, I = temp_index.search(cluster_vectors[i:i+1], len(cluster_vectors))
+
+            # Filter by higher similarity threshold
+            similar_temp_indices = set(I[0][D[0] <= max_l2_squared])
+
+            if len(similar_temp_indices) > 0:
+                # Use transitive similarity within the subcluster
+                subcluster_growing = True
+                while subcluster_growing:
+                    size_before = len(similar_temp_indices)
+
+                    for idx in list(similar_temp_indices):
+                        if idx >= 0 and idx < len(cluster_vectors):
+                            D_new, I_new = temp_index.search(cluster_vectors[idx:idx+1], len(cluster_vectors))
+                            new_similar = set(I_new[0][D_new[0] <= max_l2_squared])
+                            similar_temp_indices.update(new_similar)
+
+                    subcluster_growing = len(similar_temp_indices) > size_before
+
+                # Create subcluster items
+                subcluster_items = []
+                for temp_idx in similar_temp_indices:
+                    if temp_idx >= 0 and temp_idx not in used_temp_indices and temp_idx < len(cluster_items):
+                        used_temp_indices.add(temp_idx)
+                        item, _ = temp_to_item[temp_idx]
+                        subcluster_items.append(item)
+
+                if subcluster_items:
+                    subclusters.append(subcluster_items)
+
+        # If subclustering didn't produce meaningful results, return original as single subcluster
+        if len(subclusters) <= 1:
+            return [cluster_items]
+
+        return subclusters
+
+    async def get_hierarchical_clusters(
+        self,
+        db: AsyncSession,
+        hours: int,
+        min_similarity: float,
+        subcluster_min_size: int,
+        subcluster_similarity: float
+    ) -> Dict[int, dict]:
+        """
+        Get hierarchical news clusters using FAISS similarity search.
+
+        Creates two-level hierarchy:
+        - Top-level clusters at min_similarity threshold
+        - Subclusters at higher subcluster_similarity for large clusters
+
+        Args:
+            db: Database session
+            hours: Time range in hours
+            min_similarity: Similarity threshold for top-level clusters
+            subcluster_min_size: Minimum cluster size to trigger subclustering
+            subcluster_similarity: Higher similarity threshold for subclusters
+
+        Returns:
+            Dictionary mapping cluster_id to hierarchical cluster data:
+            {
+                cluster_id: {
+                    'items': [...],  # All items in cluster
+                    'subclusters': [  # List of subclusters (if applicable)
+                        [item1, item2, ...],
+                        [item3, item4, ...],
+                    ]
+                }
+            }
+        """
+        try:
+            # Update index if needed
+            now = datetime.now(timezone.utc)
+            if not self.last_update or \
+               (now - self.last_update) > timedelta(hours=1):
+                await self.update_index(db, hours)
+
+            if self.index.ntotal == 0 or not self.vectors:
+                logger.warning("No vectors in FAISS index")
+                return {}
+
+            # Convert similarity threshold to L2 distance
+            max_l2_squared = 2 * (1 - min_similarity)
+
+            # Find clusters using transitive clustering
+            hierarchical_clusters = {}
+            used_indices = set()
+            cluster_id = 0
+
+            vectors_array = np.array(self.vectors)
+
+            for i in range(len(vectors_array)):
+                if i in used_indices:
+                    continue
+
+                try:
+                    # Search for similar vectors
+                    D, I = self.index.search(vectors_array[i:i+1], self.index.ntotal)
+
+                    # Filter by distance threshold and create cluster
+                    similar_indices = set(I[0][D[0] <= max_l2_squared])
+
+                    if len(similar_indices) > 1:  # At least 2 items to form a cluster
+                        # Use transitive similarity
+                        cluster_growing = True
+                        while cluster_growing:
+                            size_before = len(similar_indices)
+
+                            for idx in list(similar_indices):
+                                if idx >= 0:
+                                    D_new, I_new = self.index.search(vectors_array[idx:idx+1], self.index.ntotal)
+                                    new_similar = set(I_new[0][D_new[0] <= max_l2_squared])
+                                    similar_indices.update(new_similar)
+
+                            cluster_growing = len(similar_indices) > size_before
+
+                        # Create cluster items
+                        cluster_items = []
+                        cluster_indices = []  # Track indices for subclustering
+
+                        for idx in similar_indices:
+                            if idx >= 0 and idx not in used_indices:
+                                used_indices.add(idx)
+                                D_center, _ = self.index.search(vectors_array[i:i+1], 1)
+                                similarity = 1 - (float(D_center[0][0]) / 2)
+                                cluster_items.append({
+                                    'id': self.news_ids[idx],
+                                    'similarity': similarity
+                                })
+                                cluster_indices.append(idx)
+
+                        if len(cluster_items) > 1:
+                            # Check if cluster should be subclustered
+                            subclusters = None
+                            if len(cluster_items) >= subcluster_min_size:
+                                subclusters = self._create_subclusters(
+                                    cluster_items,
+                                    cluster_indices,
+                                    subcluster_similarity
+                                )
+                                # Only keep subclusters if we got meaningful division
+                                if len(subclusters) <= 1:
+                                    subclusters = None
+
+                            hierarchical_clusters[cluster_id] = {
+                                'items': cluster_items,
+                                'subclusters': subclusters
+                            }
+                            cluster_id += 1
+
+                except Exception as e:
+                    logger.error(f"Error processing hierarchical cluster for vector {i}: {str(e)}\n{traceback.format_exc()}")
+                    continue
+
+            # Log statistics
+            subclustered_count = sum(1 for c in hierarchical_clusters.values() if c['subclusters'] is not None)
+            logger.info(f"Generated {len(hierarchical_clusters)} hierarchical clusters ({subclustered_count} with subclusters)")
+
+            return hierarchical_clusters
+
+        except Exception as e:
+            logger.error(f"Error getting hierarchical clusters: {str(e)}\n{traceback.format_exc()}")
             raise
 
     async def search_similar(
