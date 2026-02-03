@@ -29,17 +29,39 @@
 </div>
 
 <template id="clusterTemplate">
-    <div class="mb-4">
+    <div class="mb-4 cluster-container">
         <div class="d-flex justify-content-between align-items-center mb-2">
-            <h5 class="mb-0"> </h5>
-            <span class="badge bg-primary"><span class="article-count"></span> articles</span>
+            <h5 class="mb-0 cluster-name"></h5>
+            <div>
+                <span class="badge bg-secondary subcluster-badge me-1" style="display: none;"><span class="subcluster-count"></span> subtopics</span>
+                <span class="badge bg-primary"><span class="article-count"></span> articles</span>
+            </div>
         </div>
         <details class="cluster-details">
             <summary class="center-article">
                 <!-- Center article will be inserted here -->
             </summary>
+            <div class="subclusters-container mt-3">
+                <!-- Subclusters will be inserted here if present -->
+            </div>
             <div class="list-group list-group-flush related-news mt-3">
-                <!-- Related articles will be inserted here -->
+                <!-- Related articles will be inserted here (flat mode) -->
+            </div>
+        </details>
+    </div>
+</template>
+
+<template id="subclusterTemplate">
+    <div class="subcluster mb-3">
+        <details class="subcluster-details">
+            <summary class="subcluster-header">
+                <div class="d-flex justify-content-between align-items-center">
+                    <span class="subcluster-name fw-semibold"></span>
+                    <span class="badge bg-info"><span class="subcluster-article-count"></span> articles</span>
+                </div>
+            </summary>
+            <div class="list-group list-group-flush subcluster-articles mt-2">
+                <!-- Subcluster articles will be inserted here -->
             </div>
         </details>
     </div>
@@ -82,15 +104,35 @@
 document.addEventListener('DOMContentLoaded', function() {
     const clustersContainer = document.getElementById('clustersContainer');
     const clusterTemplate = document.getElementById('clusterTemplate');
+    const subclusterTemplate = document.getElementById('subclusterTemplate');
     const centerArticleTemplate = document.getElementById('centerArticleTemplate');
     const newsItemTemplate = document.getElementById('newsItemTemplate');
-    
+
     // Parse server data
     const serverData = JSON.parse(document.getElementById('serverData').textContent);
 
+    function createArticleElement(item, showSimilarity = true) {
+        const newsElement = newsItemTemplate.content.cloneNode(true);
+
+        newsElement.querySelector('.news-title').textContent = item.title;
+        newsElement.querySelector('.news-summary').textContent = item.summary || 'No summary available';
+        newsElement.querySelector('.news-source').textContent = new URL(item.source_url).hostname;
+        newsElement.querySelector('.news-date').textContent = new Date(item.last_seen_at).toLocaleDateString();
+
+        // Add similarity badge
+        if (showSimilarity) {
+            const similarityPercent = Math.round(item.similarity * 100);
+            newsElement.querySelector('.similarity-badge').textContent = `${similarityPercent}%`;
+        } else {
+            newsElement.querySelector('.similarity-badge').style.display = 'none';
+        }
+
+        return newsElement;
+    }
+
     function displayClusters(clusters) {
         clustersContainer.innerHTML = '';
-        
+
         if (!clusters || Object.keys(clusters).length === 0) {
             clustersContainer.innerHTML = `
                 <div class="alert alert-info">
@@ -100,40 +142,71 @@ document.addEventListener('DOMContentLoaded', function() {
             return;
         }
 
-        Object.entries(clusters).forEach(([clusterId, newsItems], index) => {
+        Object.entries(clusters).forEach(([clusterId, clusterData], index) => {
             const clusterElement = clusterTemplate.content.cloneNode(true);
-            
-            clusterElement.querySelector('.article-count').textContent = newsItems.length;
-            
+
+            // Handle both old format (array) and new format (object with articles/subclusters)
+            const isNewFormat = clusterData && typeof clusterData === 'object' && !Array.isArray(clusterData);
+            const articles = isNewFormat ? clusterData.articles : clusterData;
+            const subclusters = isNewFormat ? clusterData.subclusters : null;
+            const clusterName = isNewFormat ? clusterData.name : null;
+
+            // Set cluster name if available
+            if (clusterName) {
+                clusterElement.querySelector('.cluster-name').textContent = clusterName;
+            }
+
+            clusterElement.querySelector('.article-count').textContent = articles.length;
+
             // Get the center article (first item in the sorted list)
-            const centerArticle = newsItems[0];
+            const centerArticle = articles[0];
             const centerElement = centerArticleTemplate.content.cloneNode(true);
-            
+
             // Populate center article
             centerElement.querySelector('.news-title').textContent = centerArticle.title;
             centerElement.querySelector('.news-summary').textContent = centerArticle.summary || 'No summary available';
             centerElement.querySelector('.news-source').textContent = new URL(centerArticle.source_url).hostname;
             centerElement.querySelector('.news-date').textContent = new Date(centerArticle.last_seen_at).toLocaleDateString();
-            
+
             clusterElement.querySelector('.center-article').appendChild(centerElement);
-            
-            // Add related articles (skip the first/center article)
+
+            const subclusterContainer = clusterElement.querySelector('.subclusters-container');
             const relatedContainer = clusterElement.querySelector('.related-news');
-            newsItems.slice(1).forEach(item => {
-                const newsElement = newsItemTemplate.content.cloneNode(true);
-                
-                newsElement.querySelector('.news-title').textContent = item.title;
-                newsElement.querySelector('.news-summary').textContent = item.summary || 'No summary available';
-                newsElement.querySelector('.news-source').textContent = new URL(item.source_url).hostname;
-                newsElement.querySelector('.news-date').textContent = new Date(item.last_seen_at).toLocaleDateString();
-                
-                // Add similarity badge
-                const similarityPercent = Math.round(item.similarity * 100);
-                newsElement.querySelector('.similarity-badge').textContent = `${similarityPercent}%`;
-                
-                relatedContainer.appendChild(newsElement);
-            });
-            
+
+            // Check if we have subclusters
+            if (subclusters && subclusters.length > 1) {
+                // Show subcluster badge
+                const subclusterBadge = clusterElement.querySelector('.subcluster-badge');
+                subclusterBadge.style.display = 'inline-block';
+                clusterElement.querySelector('.subcluster-count').textContent = subclusters.length;
+
+                // Hide flat related news container
+                relatedContainer.style.display = 'none';
+
+                // Render subclusters
+                subclusters.forEach((subcluster, subIndex) => {
+                    const subElement = subclusterTemplate.content.cloneNode(true);
+
+                    subElement.querySelector('.subcluster-name').textContent = subcluster.name || `Subtopic ${subIndex + 1}`;
+                    subElement.querySelector('.subcluster-article-count').textContent = subcluster.articles.length;
+
+                    const subArticlesContainer = subElement.querySelector('.subcluster-articles');
+                    subcluster.articles.forEach(item => {
+                        subArticlesContainer.appendChild(createArticleElement(item));
+                    });
+
+                    subclusterContainer.appendChild(subElement);
+                });
+            } else {
+                // Hide subclusters container in flat mode
+                subclusterContainer.style.display = 'none';
+
+                // Add related articles (skip the first/center article)
+                articles.slice(1).forEach(item => {
+                    relatedContainer.appendChild(createArticleElement(item));
+                });
+            }
+
             clustersContainer.appendChild(clusterElement);
         });
     }
@@ -187,6 +260,58 @@ document.addEventListener('DOMContentLoaded', function() {
     transform: rotate(0);
 }
 
+/* Subcluster styles */
+.subcluster {
+    border-left: 3px solid #0d6efd;
+    padding-left: 1rem;
+    margin-left: 0.5rem;
+}
+
+.subcluster-details {
+    cursor: pointer;
+}
+
+.subcluster-details summary {
+    list-style: none;
+    padding: 0.75rem;
+    margin: -0.75rem;
+    border-radius: 0.25rem;
+    transition: background-color 0.2s;
+    background-color: rgba(13, 110, 253, 0.05);
+}
+
+.subcluster-details summary:hover {
+    background-color: rgba(13, 110, 253, 0.1);
+}
+
+.subcluster-details summary::marker {
+    display: none;
+}
+
+.subcluster-details summary::-webkit-details-marker {
+    display: none;
+}
+
+.subcluster-details summary::after {
+    content: '▼';
+    float: right;
+    transform: rotate(-90deg);
+    transition: transform 0.2s;
+    font-size: 0.8em;
+}
+
+.subcluster-details[open] summary::after {
+    transform: rotate(0);
+}
+
+.subcluster-name {
+    color: #0d6efd;
+}
+
+.subcluster-articles {
+    margin-left: 0.5rem;
+}
+
 .article-details {
     cursor: pointer;
 }
@@ -215,6 +340,10 @@ document.addEventListener('DOMContentLoaded', function() {
 
 .similarity-badge {
     font-size: 0.75rem;
+}
+
+.cluster-name {
+    color: #495057;
 }
 </style>
 {% endblock %}

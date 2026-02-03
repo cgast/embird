@@ -134,6 +134,24 @@ def _tokenize(text: str) -> List[str]:
 
     return filtered
 
+def _enrich_article(news_item: NewsItem, similarity: float, cluster_id: int) -> dict:
+    """Helper to create enriched article dict from NewsItem."""
+    return {
+        "id": news_item.id,
+        "title": news_item.title,
+        "summary": news_item.summary,
+        "url": news_item.url,
+        "source_url": news_item.source_url,
+        "first_seen_at": news_item.first_seen_at.isoformat() if news_item.first_seen_at else None,
+        "last_seen_at": news_item.last_seen_at.isoformat() if news_item.last_seen_at else None,
+        "hit_count": news_item.hit_count,
+        "created_at": news_item.created_at.isoformat() if news_item.created_at else None,
+        "updated_at": news_item.updated_at.isoformat() if news_item.updated_at else None,
+        "similarity": similarity,
+        "cluster_id": cluster_id
+    }
+
+
 async def generate_clusters(db: AsyncSession, hours: int, min_similarity: float) -> Dict[int, dict]:
     """Generate news clusters using FAISS vector similarity.
 
@@ -142,7 +160,14 @@ async def generate_clusters(db: AsyncSession, hours: int, min_similarity: float)
         {
             cluster_id: {
                 "name": "keyword1, keyword2, keyword3",
-                "articles": [list of article dicts]
+                "articles": [list of article dicts],
+                "subclusters": [  # Optional - only for large clusters
+                    {
+                        "name": "subcluster keywords",
+                        "articles": [list of article dicts]
+                    },
+                    ...
+                ]
             }
         }
     """
@@ -150,63 +175,101 @@ async def generate_clusters(db: AsyncSession, hours: int, min_similarity: float)
         # Get FAISS service
         faiss_service = get_faiss_service()
 
-        # Generate clusters using FAISS
-        clusters = await faiss_service.get_clusters(db, hours, min_similarity)
+        # Check if hierarchical clustering is enabled
+        use_hierarchical = settings.SUBCLUSTER_ENABLED
+
+        if use_hierarchical:
+            # Generate hierarchical clusters
+            clusters = await faiss_service.get_hierarchical_clusters(
+                db,
+                hours,
+                min_similarity,
+                settings.SUBCLUSTER_MIN_SIZE,
+                settings.SUBCLUSTER_SIMILARITY
+            )
+        else:
+            # Generate flat clusters (legacy mode)
+            flat_clusters = await faiss_service.get_clusters(db, hours, min_similarity)
+            # Convert to hierarchical format for consistent processing
+            clusters = {
+                cid: {'items': items, 'subclusters': None}
+                for cid, items in flat_clusters.items()
+            }
 
         if not clusters:
             logger.warning("No clusters found")
             return {}
 
-        # Enrich cluster data with additional news item details from database
+        # Collect all news IDs for batch fetching
+        all_news_ids = set()
+        for cluster_data in clusters.values():
+            for item in cluster_data['items']:
+                all_news_ids.add(item['id'])
+
+        # Batch fetch all news items from database
+        stmt = select(NewsItem).filter(NewsItem.id.in_(all_news_ids))
+        result = await db.execute(stmt)
+        news_items_map = {item.id: item for item in result.scalars().all()}
+
+        # Enrich cluster data
         enriched_clusters: Dict[int, dict] = {}
 
-        for cluster_id, items in clusters.items():
+        for cluster_id, cluster_data in clusters.items():
             try:
-                # Get all news IDs in this cluster
-                news_ids = [item['id'] for item in items]
+                items = cluster_data['items']
+                subclusters_raw = cluster_data.get('subclusters')
 
-                # Get full news items from database
-                stmt = select(NewsItem).filter(NewsItem.id.in_(news_ids))
-                result = await db.execute(stmt)
-                news_items = {item.id: item for item in result.scalars().all()}
+                # Enrich all items in the cluster
+                enriched_items = []
+                for item in items:
+                    news_item = news_items_map.get(item['id'])
+                    if news_item:
+                        enriched_items.append(_enrich_article(news_item, item['similarity'], cluster_id))
 
-                if not news_items:
+                if not enriched_items:
                     logger.warning(f"No news items found for cluster {cluster_id}")
                     continue
 
-                # Create enriched items
-                enriched_items = []
-                for item in items:
-                    news_item = news_items.get(item['id'])
-                    if news_item:
-                        enriched_items.append({
-                            "id": news_item.id,
-                            "title": news_item.title,
-                            "summary": news_item.summary,
-                            "url": news_item.url,
-                            "source_url": news_item.source_url,
-                            "first_seen_at": news_item.first_seen_at.isoformat() if news_item.first_seen_at else None,
-                            "last_seen_at": news_item.last_seen_at.isoformat() if news_item.last_seen_at else None,
-                            "hit_count": news_item.hit_count,
-                            "created_at": news_item.created_at.isoformat() if news_item.created_at else None,
-                            "updated_at": news_item.updated_at.isoformat() if news_item.updated_at else None,
-                            "similarity": item['similarity'],
-                            "cluster_id": cluster_id
-                        })
+                # Generate cluster name from all articles
+                cluster_name = extract_cluster_keywords(enriched_items)
 
-                if enriched_items:
-                    # Generate cluster name from keywords
-                    cluster_name = extract_cluster_keywords(enriched_items)
-                    enriched_clusters[cluster_id] = {
-                        "name": cluster_name,
-                        "articles": enriched_items
-                    }
+                cluster_result = {
+                    "name": cluster_name,
+                    "articles": enriched_items
+                }
+
+                # Process subclusters if present
+                if subclusters_raw and len(subclusters_raw) > 1:
+                    enriched_subclusters = []
+                    for subcluster_items in subclusters_raw:
+                        enriched_sub_items = []
+                        for item in subcluster_items:
+                            news_item = news_items_map.get(item['id'])
+                            if news_item:
+                                enriched_sub_items.append(
+                                    _enrich_article(news_item, item['similarity'], cluster_id)
+                                )
+
+                        if enriched_sub_items:
+                            subcluster_name = extract_cluster_keywords(enriched_sub_items, num_keywords=3)
+                            enriched_subclusters.append({
+                                "name": subcluster_name,
+                                "articles": enriched_sub_items
+                            })
+
+                    # Only include subclusters if we have multiple meaningful ones
+                    if len(enriched_subclusters) > 1:
+                        cluster_result["subclusters"] = enriched_subclusters
+
+                enriched_clusters[cluster_id] = cluster_result
 
             except Exception as e:
                 logger.error(f"Error enriching cluster {cluster_id}: {str(e)}\n{traceback.format_exc()}")
                 continue
 
-        logger.info(f"Generated {len(enriched_clusters)} enriched clusters")
+        # Log statistics
+        subclustered_count = sum(1 for c in enriched_clusters.values() if 'subclusters' in c)
+        logger.info(f"Generated {len(enriched_clusters)} enriched clusters ({subclustered_count} with subclusters)")
         return enriched_clusters
 
     except Exception as e:
