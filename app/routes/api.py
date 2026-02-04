@@ -114,45 +114,49 @@ async def search_news(
     query: str,
     db: AsyncSession = Depends(get_db),
     embedding_service: EmbeddingService = Depends(get_embedding_service),
+    source_url: Optional[str] = None,
     limit: int = Query(10, ge=1, le=100)
 ):
     """Search news items by semantic similarity."""
     # Validate query
     if not query or not query.strip():
         raise HTTPException(status_code=422, detail="Search query cannot be empty")
-    
+
     # Clean query
     query = query.strip()
-    
+
     try:
         # Verify API key is loaded
         if not settings.COHERE_API_KEY:
             raise HTTPException(status_code=422, detail="Cohere API key not configured")
-        
+
         # Generate embedding for the query
         query_embedding = await embedding_service.get_embedding(query)
-        
+
         if not query_embedding:
             raise HTTPException(status_code=422, detail="Failed to generate embedding")
-            
+
         # Get FAISS service
         faiss_service = get_faiss_service()
-        
-        # Search using FAISS
+
+        # Search using FAISS (fetch more results if filtering by source, since we filter after)
+        faiss_limit = limit * 5 if source_url else limit
         similar_items = await faiss_service.search_similar(
             db,
             np.array(query_embedding, dtype=np.float32),
-            k=limit,
+            k=faiss_limit,
             min_similarity=0.5
         )
-        
+
         if similar_items:
             # Get full news items from database
             item_ids = [item_id for item_id, _ in similar_items]
             stmt = select(NewsItem).filter(NewsItem.id.in_(item_ids))
+            if source_url:
+                stmt = stmt.filter(NewsItem.source_url == source_url)
             result = await db.execute(stmt)
             db_items = {item.id: item for item in result.scalars().all()}
-            
+
             # Create NewsItemSimilarity objects
             news_items = []
             for item_id, similarity in similar_items:
@@ -173,32 +177,36 @@ async def search_news(
                     }
                     response_item = NewsItemSimilarity.model_validate(item_data)
                     news_items.append(response_item)
-            
-            return news_items
-            
+
+            if news_items:
+                return news_items[:limit]
+
         # If no results from FAISS, fall back to database search
         vector_str = f"[{','.join(str(x) for x in query_embedding)}]"
-        
-        stmt = text("""
-            SELECT 
-                id, title, summary, url, source_url, 
+
+        source_filter_sql = "AND source_url = :source_url" if source_url else ""
+
+        stmt = text(f"""
+            SELECT
+                id, title, summary, url, source_url,
                 first_seen_at, last_seen_at, hit_count,
                 created_at, updated_at,
                 cosine_distance(embedding, cast(:vector as vector(1024))) as distance
             FROM news
-            WHERE embedding IS NOT NULL
+            WHERE embedding IS NOT NULL {source_filter_sql}
             ORDER BY cosine_distance(embedding, cast(:vector as vector(1024)))
             LIMIT :limit
         """)
 
-        result = await db.execute(
-            stmt,
-            {
-                "vector": vector_str,
-                "limit": limit
-            }
-        )
-        
+        params = {
+            "vector": vector_str,
+            "limit": limit
+        }
+        if source_url:
+            params["source_url"] = source_url
+
+        result = await db.execute(stmt, params)
+
         news_items = []
         for row in result:
             news_item = NewsItem(
@@ -213,14 +221,14 @@ async def search_news(
                 created_at=row.created_at,
                 updated_at=row.updated_at
             )
-            
+
             item_data = news_item.__dict__.copy()
             item_data['similarity'] = (1.0 - float(row.distance)) / 2.0
             response_item = NewsItemSimilarity.model_validate(item_data)
             news_items.append(response_item)
 
         return news_items
-        
+
     except Exception as e:
         logging.error(f"Search error: {str(e)}")
         raise HTTPException(status_code=422, detail=str(e))

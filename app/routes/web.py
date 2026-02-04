@@ -294,10 +294,12 @@ async def view_news_item(
 @router.get("/search", response_class=HTMLResponse)
 async def search_form(request: Request):
     """Render the search form."""
+    urls = url_db.get_all_urls()
     return request.state.templates.TemplateResponse(
         "search.html",
         {
             "request": request,
+            "urls": urls,
             "enable_url_management": settings.ENABLE_URL_MANAGEMENT,
             "enable_preference_management": settings.ENABLE_PREFERENCE_MANAGEMENT
         }

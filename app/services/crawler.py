@@ -73,6 +73,8 @@ class Crawler:
                 await self._crawl_rss(url_item)
             else:
                 await self._crawl_homepage(url_item)
+            # Update last_crawled_at after successful crawl
+            self.url_db.update_url_crawl_time(url_item.id)
         except Exception as e:
             logger.error(f"Error crawling {url_item.url}: {str(e)}")
 
