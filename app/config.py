@@ -43,7 +43,8 @@ class Settings(BaseSettings):
     # Hierarchical Clustering Settings
     SUBCLUSTER_ENABLED: bool = os.environ.get("SUBCLUSTER_ENABLED", "True").lower() in ("true", "1", "t")
     SUBCLUSTER_MIN_SIZE: int = int(os.environ.get("SUBCLUSTER_MIN_SIZE", 5))  # Minimum cluster size to trigger subclustering
-    SUBCLUSTER_SIMILARITY: float = float(os.environ.get("SUBCLUSTER_SIMILARITY", 0.70))  # Higher threshold for subclusters
+    SUBCLUSTER_SIMILARITY: float = float(os.environ.get("SUBCLUSTER_SIMILARITY", 0.70))  # Starting threshold for subclusters
+    SUBCLUSTER_MAX_SIZE: int = int(os.environ.get("SUBCLUSTER_MAX_SIZE", 10))  # Max articles per leaf subcluster before recursive splitting
     
     # FAISS Settings
     FAISS_UPDATE_INTERVAL: int = int(os.environ.get("FAISS_UPDATE_INTERVAL", 3600))  # 1 hour in seconds

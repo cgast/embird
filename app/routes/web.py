@@ -329,29 +329,65 @@ async def view_clusters(
         else:
             clusters_data = clusters.clusters
             
+        def _serialize_article_web(item):
+            """Serialize a single article for the web template."""
+            if isinstance(item, dict):
+                return {
+                    'id': item.get('id'),
+                    'title': item.get('title', ''),
+                    'summary': item.get('summary', ''),
+                    'url': item.get('url', ''),
+                    'source_url': item.get('source_url', ''),
+                    'similarity': float(item.get('similarity', 0.0)),
+                    'hit_count': int(item.get('hit_count', 1)),
+                    'first_seen_at': item.get('first_seen_at'),
+                    'last_seen_at': item.get('last_seen_at'),
+                    'created_at': item.get('created_at'),
+                    'updated_at': item.get('updated_at')
+                }
+            return item
+
+        def _serialize_subclusters_web(subclusters):
+            """Recursively serialize subclusters for the web template."""
+            if not subclusters:
+                return None
+            result = []
+            for sub in subclusters:
+                serialized = {
+                    'name': sub.get('name', 'Subtopic'),
+                    'articles': [_serialize_article_web(a) for a in sub.get('articles', [])],
+                }
+                child_subs = sub.get('subclusters')
+                serialized['subclusters'] = _serialize_subclusters_web(child_subs) if child_subs else None
+                result.append(serialized)
+            return result
+
         # Convert clusters data to JSON-serializable format
         serializable_clusters = {}
-        for cluster_id, items in clusters_data.items():
-            serializable_items = []
-            for item in items:
-                # Ensure item is a dictionary
-                if isinstance(item, dict):
-                    serializable_items.append({
-                        'id': item.get('id'),
-                        'title': item.get('title', ''),
-                        'summary': item.get('summary', ''),
-                        'url': item.get('url', ''),
-                        'source_url': item.get('source_url', ''),
-                        'similarity': float(item.get('similarity', 0.0)),
-                        'hit_count': int(item.get('hit_count', 1)),
-                        'first_seen_at': item.get('first_seen_at'),
-                        'last_seen_at': item.get('last_seen_at'),
-                        'created_at': item.get('created_at'),
-                        'updated_at': item.get('updated_at')
-                    })
-            
-            if serializable_items:  # Only add clusters that have items
-                serializable_clusters[str(cluster_id)] = serializable_items
+        for cluster_id, cluster_info in clusters_data.items():
+            # Handle both old format (list of items) and new format (dict with name/articles/subclusters)
+            if isinstance(cluster_info, dict) and 'articles' in cluster_info:
+                articles = cluster_info['articles']
+                serializable_items = [_serialize_article_web(item) for item in articles]
+                subclusters = cluster_info.get('subclusters')
+
+                if serializable_items:
+                    cluster_result = {
+                        'name': cluster_info.get('name', f'Cluster {cluster_id}'),
+                        'articles': serializable_items,
+                    }
+                    if subclusters:
+                        cluster_result['subclusters'] = _serialize_subclusters_web(subclusters)
+                    serializable_clusters[str(cluster_id)] = cluster_result
+            else:
+                # Old format: cluster_info is a list of items
+                serializable_items = []
+                items = cluster_info if isinstance(cluster_info, list) else []
+                for item in items:
+                    if isinstance(item, dict):
+                        serializable_items.append(_serialize_article_web(item))
+                if serializable_items:
+                    serializable_clusters[str(cluster_id)] = serializable_items
         
         return request.state.templates.TemplateResponse(
             "news_clusters.html",

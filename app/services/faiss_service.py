@@ -139,9 +139,9 @@ class FaissService:
                         for idx in similar_indices:
                             if idx >= 0 and idx not in used_indices:  # Valid index and not used
                                 used_indices.add(idx)
-                                # Calculate similarity to cluster center
-                                D_center, _ = self.index.search(vectors_array[i:i+1], 1)
-                                similarity = 1 - (float(D_center[0][0]) / 2)  # Convert L2 squared to similarity
+                                # Calculate actual similarity between this item and the cluster seed
+                                d_squared = float(np.sum((vectors_array[i] - vectors_array[idx]) ** 2))
+                                similarity = max(0.0, 1 - (d_squared / 2))
                                 cluster_items.append({
                                     'id': self.news_ids[idx],
                                     'similarity': similarity
@@ -162,82 +162,141 @@ class FaissService:
             logger.error(f"Error getting clusters: {str(e)}\n{traceback.format_exc()}")
             raise
 
-    def _create_subclusters(
+    def _split_cluster(
         self,
         cluster_items: List[dict],
         cluster_indices: List[int],
-        subcluster_similarity: float
-    ) -> List[List[dict]]:
+        similarity_threshold: float
+    ) -> List[Tuple[List[dict], List[int]]]:
         """
-        Create subclusters within a large cluster using higher similarity threshold.
+        Split a cluster into subclusters at the given similarity threshold.
+
+        Uses transitive clustering within the cluster's own temporary FAISS index.
 
         Args:
             cluster_items: List of items in the cluster with 'id' and 'similarity'
-            cluster_indices: Corresponding indices in the FAISS index
-            subcluster_similarity: Higher similarity threshold for subclustering
+            cluster_indices: Corresponding indices in the main FAISS index
+            similarity_threshold: Similarity threshold for this split level
 
         Returns:
-            List of subclusters, each containing a list of items
+            List of (items, indices) tuples, one per resulting subcluster
         """
         if len(cluster_items) < 2:
-            return [cluster_items]
+            return [(cluster_items, cluster_indices)]
 
-        # Convert similarity threshold to L2 distance
-        max_l2_squared = 2 * (1 - subcluster_similarity)
-
-        # Get vectors for this cluster
+        max_l2_squared = 2 * (1 - similarity_threshold)
         cluster_vectors = np.array([self.vectors[idx] for idx in cluster_indices])
 
-        # Create a temporary FAISS index for this cluster
         temp_index = faiss.IndexFlatL2(self.dimension)
         temp_index.add(cluster_vectors)
 
-        # Map from temp index position to original item
-        temp_to_item = {i: (cluster_items[i], cluster_indices[i]) for i in range(len(cluster_items))}
-
         subclusters = []
-        used_temp_indices = set()
+        used = set()
 
         for i in range(len(cluster_vectors)):
-            if i in used_temp_indices:
+            if i in used:
                 continue
 
-            # Search for similar vectors within this cluster
             D, I = temp_index.search(cluster_vectors[i:i+1], len(cluster_vectors))
+            similar = set(I[0][D[0] <= max_l2_squared])
 
-            # Filter by higher similarity threshold
-            similar_temp_indices = set(I[0][D[0] <= max_l2_squared])
+            # Transitive expansion
+            growing = True
+            while growing:
+                before = len(similar)
+                for idx in list(similar):
+                    if 0 <= idx < len(cluster_vectors):
+                        D_new, I_new = temp_index.search(cluster_vectors[idx:idx+1], len(cluster_vectors))
+                        similar.update(set(I_new[0][D_new[0] <= max_l2_squared]))
+                growing = len(similar) > before
 
-            if len(similar_temp_indices) > 0:
-                # Use transitive similarity within the subcluster
-                subcluster_growing = True
-                while subcluster_growing:
-                    size_before = len(similar_temp_indices)
+            sub_items = []
+            sub_indices = []
+            for temp_idx in sorted(similar):
+                if 0 <= temp_idx < len(cluster_items) and temp_idx not in used:
+                    used.add(temp_idx)
+                    sub_items.append(cluster_items[temp_idx])
+                    sub_indices.append(cluster_indices[temp_idx])
 
-                    for idx in list(similar_temp_indices):
-                        if idx >= 0 and idx < len(cluster_vectors):
-                            D_new, I_new = temp_index.search(cluster_vectors[idx:idx+1], len(cluster_vectors))
-                            new_similar = set(I_new[0][D_new[0] <= max_l2_squared])
-                            similar_temp_indices.update(new_similar)
-
-                    subcluster_growing = len(similar_temp_indices) > size_before
-
-                # Create subcluster items
-                subcluster_items = []
-                for temp_idx in similar_temp_indices:
-                    if temp_idx >= 0 and temp_idx not in used_temp_indices and temp_idx < len(cluster_items):
-                        used_temp_indices.add(temp_idx)
-                        item, _ = temp_to_item[temp_idx]
-                        subcluster_items.append(item)
-
-                if subcluster_items:
-                    subclusters.append(subcluster_items)
-
-        # If subclustering didn't produce meaningful results, return original as single subcluster
-        if len(subclusters) <= 1:
-            return [cluster_items]
+            if sub_items:
+                subclusters.append((sub_items, sub_indices))
 
         return subclusters
+
+    def _recursive_subcluster(
+        self,
+        cluster_items: List[dict],
+        cluster_indices: List[int],
+        similarity_threshold: float,
+        max_cluster_size: int,
+        similarity_step: float = 0.05,
+        max_similarity: float = 0.95,
+        depth: int = 0,
+        max_depth: int = 5
+    ) -> dict:
+        """
+        Recursively split a cluster into subclusters until all leaf clusters
+        are at most max_cluster_size items.
+
+        At each level, tries to split using transitive clustering at the current
+        similarity threshold. If that doesn't split, increases the threshold
+        progressively until it does (or reaches max_similarity). Then recursively
+        processes any subclusters that are still too large.
+
+        Args:
+            cluster_items: Items in this cluster
+            cluster_indices: FAISS index positions for these items
+            similarity_threshold: Starting similarity threshold for splitting
+            max_cluster_size: Maximum items per leaf subcluster
+            similarity_step: How much to increase threshold per attempt
+            max_similarity: Maximum threshold to try before giving up
+            depth: Current recursion depth
+            max_depth: Maximum recursion depth
+
+        Returns:
+            Tree node: {'items': [...], 'subclusters': None or [node, ...]}
+        """
+        # Base case: small enough or too deep
+        if len(cluster_items) <= max_cluster_size or depth >= max_depth:
+            return {
+                'items': cluster_items,
+                'subclusters': None
+            }
+
+        # Try splitting at progressively higher thresholds
+        subclusters = None
+        current_threshold = similarity_threshold
+
+        while current_threshold <= max_similarity:
+            result = self._split_cluster(cluster_items, cluster_indices, current_threshold)
+            if len(result) > 1:
+                subclusters = result
+                break
+            current_threshold = round(current_threshold + similarity_step, 2)
+
+        # Can't split even at max threshold
+        if subclusters is None:
+            return {
+                'items': cluster_items,
+                'subclusters': None
+            }
+
+        # Recursively process each subcluster that's still too large
+        next_threshold = round(current_threshold + similarity_step, 2)
+        children = []
+        for sub_items, sub_indices in subclusters:
+            child = self._recursive_subcluster(
+                sub_items, sub_indices,
+                next_threshold, max_cluster_size,
+                similarity_step, max_similarity,
+                depth + 1, max_depth
+            )
+            children.append(child)
+
+        return {
+            'items': cluster_items,
+            'subclusters': children
+        }
 
     async def get_hierarchical_clusters(
         self,
@@ -245,30 +304,33 @@ class FaissService:
         hours: int,
         min_similarity: float,
         subcluster_min_size: int,
-        subcluster_similarity: float
+        subcluster_similarity: float,
+        max_cluster_size: int = 10
     ) -> Dict[int, dict]:
         """
         Get hierarchical news clusters using FAISS similarity search.
 
-        Creates two-level hierarchy:
+        Creates a recursive hierarchy:
         - Top-level clusters at min_similarity threshold
-        - Subclusters at higher subcluster_similarity for large clusters
+        - Recursively splits large clusters at progressively higher thresholds
+          until all leaf subclusters have at most max_cluster_size items
 
         Args:
             db: Database session
             hours: Time range in hours
             min_similarity: Similarity threshold for top-level clusters
             subcluster_min_size: Minimum cluster size to trigger subclustering
-            subcluster_similarity: Higher similarity threshold for subclusters
+            subcluster_similarity: Starting similarity threshold for subclusters
+            max_cluster_size: Maximum items per leaf subcluster
 
         Returns:
             Dictionary mapping cluster_id to hierarchical cluster data:
             {
                 cluster_id: {
-                    'items': [...],  # All items in cluster
-                    'subclusters': [  # List of subclusters (if applicable)
-                        [item1, item2, ...],
-                        [item3, item4, ...],
+                    'items': [...],
+                    'subclusters': None or [  # Recursive tree of subclusters
+                        {'items': [...], 'subclusters': None or [...]},
+                        ...
                     ]
                 }
             }
@@ -319,33 +381,34 @@ class FaissService:
 
                             cluster_growing = len(similar_indices) > size_before
 
-                        # Create cluster items
+                        # Create cluster items with correct similarity to cluster center
                         cluster_items = []
-                        cluster_indices = []  # Track indices for subclustering
+                        cluster_indices_list = []
 
                         for idx in similar_indices:
                             if idx >= 0 and idx not in used_indices:
                                 used_indices.add(idx)
-                                D_center, _ = self.index.search(vectors_array[i:i+1], 1)
-                                similarity = 1 - (float(D_center[0][0]) / 2)
+                                # Calculate actual similarity between this item and the cluster seed
+                                d_squared = float(np.sum((vectors_array[i] - vectors_array[idx]) ** 2))
+                                similarity = max(0.0, 1 - (d_squared / 2))
                                 cluster_items.append({
                                     'id': self.news_ids[idx],
                                     'similarity': similarity
                                 })
-                                cluster_indices.append(idx)
+                                cluster_indices_list.append(idx)
 
                         if len(cluster_items) > 1:
-                            # Check if cluster should be subclustered
-                            subclusters = None
+                            # Recursively subcluster if large enough
                             if len(cluster_items) >= subcluster_min_size:
-                                subclusters = self._create_subclusters(
+                                tree = self._recursive_subcluster(
                                     cluster_items,
-                                    cluster_indices,
-                                    subcluster_similarity
+                                    cluster_indices_list,
+                                    subcluster_similarity,
+                                    max_cluster_size
                                 )
-                                # Only keep subclusters if we got meaningful division
-                                if len(subclusters) <= 1:
-                                    subclusters = None
+                                subclusters = tree.get('subclusters')
+                            else:
+                                subclusters = None
 
                             hierarchical_clusters[cluster_id] = {
                                 'items': cluster_items,
@@ -358,8 +421,34 @@ class FaissService:
                     continue
 
             # Log statistics
+            def _count_tree_stats(node, depth=0):
+                """Count subclusters and max depth in a tree."""
+                if node is None or not isinstance(node, list):
+                    return 0, depth
+                total = len(node)
+                max_d = depth
+                for child in node:
+                    if isinstance(child, dict) and child.get('subclusters'):
+                        sub_count, sub_depth = _count_tree_stats(child['subclusters'], depth + 1)
+                        total += sub_count
+                        max_d = max(max_d, sub_depth)
+                return total, max_d
+
             subclustered_count = sum(1 for c in hierarchical_clusters.values() if c['subclusters'] is not None)
-            logger.info(f"Generated {len(hierarchical_clusters)} hierarchical clusters ({subclustered_count} with subclusters)")
+            total_subclusters = 0
+            max_depth = 0
+            for c in hierarchical_clusters.values():
+                if c['subclusters']:
+                    count, depth = _count_tree_stats(c['subclusters'])
+                    total_subclusters += count
+                    max_depth = max(max_depth, depth)
+
+            logger.info(
+                f"Generated {len(hierarchical_clusters)} hierarchical clusters "
+                f"({subclustered_count} with subclusters, "
+                f"{total_subclusters} total subcluster nodes, "
+                f"max depth {max_depth})"
+            )
 
             return hierarchical_clusters
 

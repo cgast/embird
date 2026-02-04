@@ -152,6 +152,49 @@ def _enrich_article(news_item: NewsItem, similarity: float, cluster_id: int) -> 
     }
 
 
+def _enrich_subcluster_tree(node: dict, news_items_map: dict, cluster_id: int) -> Optional[dict]:
+    """
+    Recursively enrich a subcluster tree node with full article data and keywords.
+
+    Args:
+        node: Tree node from faiss_service with 'items' and 'subclusters'
+        news_items_map: Map of news_id -> NewsItem
+        cluster_id: Parent cluster ID
+
+    Returns:
+        Enriched node with 'name', 'articles', and optional 'subclusters', or None if empty
+    """
+    enriched_items = []
+    for item in node['items']:
+        news_item = news_items_map.get(item['id'])
+        if news_item:
+            enriched_items.append(_enrich_article(news_item, item['similarity'], cluster_id))
+
+    if not enriched_items:
+        return None
+
+    result = {
+        'name': extract_cluster_keywords(enriched_items, num_keywords=3),
+        'articles': enriched_items,
+    }
+
+    if node.get('subclusters') and len(node['subclusters']) > 1:
+        enriched_subs = []
+        for sub_node in node['subclusters']:
+            enriched_sub = _enrich_subcluster_tree(sub_node, news_items_map, cluster_id)
+            if enriched_sub:
+                enriched_subs.append(enriched_sub)
+
+        if len(enriched_subs) > 1:
+            result['subclusters'] = enriched_subs
+        else:
+            result['subclusters'] = None
+    else:
+        result['subclusters'] = None
+
+    return result
+
+
 async def generate_clusters(db: AsyncSession, hours: int, min_similarity: float) -> Dict[int, dict]:
     """Generate news clusters using FAISS vector similarity.
 
@@ -179,13 +222,14 @@ async def generate_clusters(db: AsyncSession, hours: int, min_similarity: float)
         use_hierarchical = settings.SUBCLUSTER_ENABLED
 
         if use_hierarchical:
-            # Generate hierarchical clusters
+            # Generate hierarchical clusters with recursive subclustering
             clusters = await faiss_service.get_hierarchical_clusters(
                 db,
                 hours,
                 min_similarity,
                 settings.SUBCLUSTER_MIN_SIZE,
-                settings.SUBCLUSTER_SIMILARITY
+                settings.SUBCLUSTER_SIMILARITY,
+                settings.SUBCLUSTER_MAX_SIZE
             )
         else:
             # Generate flat clusters (legacy mode)
@@ -238,24 +282,13 @@ async def generate_clusters(db: AsyncSession, hours: int, min_similarity: float)
                     "articles": enriched_items
                 }
 
-                # Process subclusters if present
+                # Process subclusters if present (recursive tree structure)
                 if subclusters_raw and len(subclusters_raw) > 1:
                     enriched_subclusters = []
-                    for subcluster_items in subclusters_raw:
-                        enriched_sub_items = []
-                        for item in subcluster_items:
-                            news_item = news_items_map.get(item['id'])
-                            if news_item:
-                                enriched_sub_items.append(
-                                    _enrich_article(news_item, item['similarity'], cluster_id)
-                                )
-
-                        if enriched_sub_items:
-                            subcluster_name = extract_cluster_keywords(enriched_sub_items, num_keywords=3)
-                            enriched_subclusters.append({
-                                "name": subcluster_name,
-                                "articles": enriched_sub_items
-                            })
+                    for sub_node in subclusters_raw:
+                        enriched_sub = _enrich_subcluster_tree(sub_node, news_items_map, cluster_id)
+                        if enriched_sub:
+                            enriched_subclusters.append(enriched_sub)
 
                     # Only include subclusters if we have multiple meaningful ones
                     if len(enriched_subclusters) > 1:

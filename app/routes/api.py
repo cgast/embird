@@ -263,6 +263,57 @@ async def get_news_clusters(db: AsyncSession = Depends(get_db)):
             db.add(new_clusters)
             await db.commit()
 
+        def _serialize_article(item):
+            """Serialize a single article item to a JSON-safe dict."""
+            if isinstance(item, dict):
+                item_dict = {
+                    'id': item.get('id', 0),
+                    'title': item.get('title', ''),
+                    'summary': item.get('summary', None),
+                    'url': item.get('url', ''),
+                    'source_url': item.get('source_url', ''),
+                    'similarity': item.get('similarity', 0.0),
+                    'hit_count': item.get('hit_count', 1),
+                }
+
+                for field in ('first_seen_at', 'last_seen_at', 'created_at', 'updated_at'):
+                    val = item.get(field)
+                    if val:
+                        item_dict[field] = val.isoformat() if hasattr(val, 'isoformat') else val
+                    else:
+                        item_dict[field] = datetime.now().isoformat()
+            else:
+                item_dict = {
+                    'id': item.id,
+                    'title': item.title,
+                    'summary': item.summary,
+                    'url': item.url,
+                    'source_url': item.source_url,
+                    'similarity': item.similarity,
+                    'first_seen_at': item.first_seen_at.isoformat() if hasattr(item.first_seen_at, 'isoformat') else item.first_seen_at,
+                    'last_seen_at': item.last_seen_at.isoformat() if hasattr(item.last_seen_at, 'isoformat') else item.last_seen_at,
+                    'hit_count': item.hit_count,
+                    'created_at': item.created_at.isoformat() if hasattr(item.created_at, 'isoformat') else item.created_at,
+                    'updated_at': item.updated_at.isoformat() if hasattr(item.updated_at, 'isoformat') else item.updated_at
+                }
+            return item_dict
+
+        def _serialize_subclusters(subclusters):
+            """Recursively serialize subcluster tree."""
+            if not subclusters:
+                return None
+            result = []
+            for sub in subclusters:
+                serialized_sub = {
+                    'name': sub.get('name', 'Subtopic'),
+                    'articles': [_serialize_article(a) for a in sub.get('articles', [])],
+                }
+                # Recursively serialize nested subclusters
+                child_subs = sub.get('subclusters')
+                serialized_sub['subclusters'] = _serialize_subclusters(child_subs) if child_subs else None
+                result.append(serialized_sub)
+            return result
+
         # Convert to dictionary with string keys and serialized items
         serialized_clusters = {}
         for cluster_id, cluster_info in cluster_data.items():
@@ -270,71 +321,24 @@ async def get_news_clusters(db: AsyncSession = Depends(get_db)):
             if isinstance(cluster_info, dict) and 'articles' in cluster_info:
                 cluster_name = cluster_info.get('name', f'Cluster {cluster_id}')
                 items = cluster_info['articles']
+                subclusters = cluster_info.get('subclusters')
             else:
-                # Old format: cluster_info is a list of items
                 cluster_name = f'Cluster {cluster_id}'
                 items = cluster_info
+                subclusters = None
 
-            serialized_items = []
-            for item in items:
-                # Handle both dictionaries and objects
-                if isinstance(item, dict):
-                    # Use get() for all fields to handle missing values safely
-                    item_dict = {
-                        'id': item.get('id', 0),
-                        'title': item.get('title', ''),
-                        'summary': item.get('summary', None),
-                        'url': item.get('url', ''),
-                        'source_url': item.get('source_url', ''),
-                        'similarity': item.get('similarity', 0.0),
-                        'hit_count': item.get('hit_count', 1),
-                    }
+            serialized_items = [_serialize_article(item) for item in items]
 
-                    # Handle datetime fields carefully
-                    first_seen = item.get('first_seen_at')
-                    if first_seen:
-                        item_dict['first_seen_at'] = first_seen.isoformat() if hasattr(first_seen, 'isoformat') else first_seen
-                    else:
-                        item_dict['first_seen_at'] = datetime.now().isoformat()
-
-                    last_seen = item.get('last_seen_at')
-                    if last_seen:
-                        item_dict['last_seen_at'] = last_seen.isoformat() if hasattr(last_seen, 'isoformat') else last_seen
-                    else:
-                        item_dict['last_seen_at'] = datetime.now().isoformat()
-
-                    created_at = item.get('created_at')
-                    if created_at:
-                        item_dict['created_at'] = created_at.isoformat() if hasattr(created_at, 'isoformat') else created_at
-                    else:
-                        item_dict['created_at'] = datetime.now().isoformat()
-
-                    updated_at = item.get('updated_at')
-                    if updated_at:
-                        item_dict['updated_at'] = updated_at.isoformat() if hasattr(updated_at, 'isoformat') else updated_at
-                    else:
-                        item_dict['updated_at'] = datetime.now().isoformat()
-                else:
-                    item_dict = {
-                        'id': item.id,
-                        'title': item.title,
-                        'summary': item.summary,
-                        'url': item.url,
-                        'source_url': item.source_url,
-                        'similarity': item.similarity,
-                        'first_seen_at': item.first_seen_at.isoformat() if hasattr(item.first_seen_at, 'isoformat') else item.first_seen_at,
-                        'last_seen_at': item.last_seen_at.isoformat() if hasattr(item.last_seen_at, 'isoformat') else item.last_seen_at,
-                        'hit_count': item.hit_count,
-                        'created_at': item.created_at.isoformat() if hasattr(item.created_at, 'isoformat') else item.created_at,
-                        'updated_at': item.updated_at.isoformat() if hasattr(item.updated_at, 'isoformat') else item.updated_at
-                    }
-                serialized_items.append(item_dict)
-
-            # Convert numeric cluster_id to string for JSON compatibility
-            serialized_clusters[str(cluster_id)] = {
+            cluster_result = {
                 'name': cluster_name,
                 'articles': serialized_items
             }
+
+            # Include subclusters if present
+            if subclusters:
+                cluster_result['subclusters'] = _serialize_subclusters(subclusters)
+
+            serialized_clusters[str(cluster_id)] = cluster_result
 
         return serialized_clusters
 

@@ -1,6 +1,7 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
+import SubclusterTree from '../components/SubclusterTree.vue'
 
 const router = useRouter()
 
@@ -107,6 +108,27 @@ const isExpanded = (clusterId) => {
   return expandedClusters.value.has(clusterId)
 }
 
+// Get subclusters from cluster (supports recursive tree format)
+const getClusterSubclusters = (clusterId) => {
+  const cluster = clusters.value[clusterId]
+  if (cluster && cluster.subclusters && cluster.subclusters.length > 1) {
+    return cluster.subclusters
+  }
+  return null
+}
+
+// Count total subclusters in tree (for display)
+const countSubclusters = (subclusters) => {
+  if (!subclusters) return 0
+  let count = subclusters.length
+  for (const sub of subclusters) {
+    if (sub.subclusters && sub.subclusters.length > 1) {
+      count += countSubclusters(sub.subclusters)
+    }
+  }
+  return count
+}
+
 const clusterKeys = ref([])
 
 onMounted(async () => {
@@ -156,6 +178,7 @@ onMounted(async () => {
               <h2 class="cluster-name">{{ getClusterName(clusterId) }}</h2>
               <div class="cluster-meta">
                 <span class="badge badge-count">{{ getClusterArticles(clusterId).length }} article{{ getClusterArticles(clusterId).length !== 1 ? 's' : '' }}</span>
+                <span v-if="getClusterSubclusters(clusterId)" class="badge badge-subtopics">{{ countSubclusters(getClusterSubclusters(clusterId)) }} subtopics</span>
                 <span v-if="getNewestArticle(clusterId)" class="newest-time text-muted">
                   {{ formatRelativeTime(getNewestArticle(clusterId).first_seen_at) }}
                 </span>
@@ -174,23 +197,34 @@ onMounted(async () => {
         </div>
 
         <div v-if="isExpanded(clusterId)" class="cluster-items">
-          <div
-            v-for="item in getClusterArticles(clusterId)"
-            :key="item.id"
-            class="cluster-item"
-            @click="goToArticle(item.id, $event)"
-          >
-            <div class="item-header">
-              <span class="badge">{{ sourceDomain(item.source_url) }}</span>
-              <span class="badge badge-secondary">{{ item.hit_count }} hits</span>
-              <span v-if="item.similarity" class="badge">
-                {{ Math.round(item.similarity * 100) }}% match
-              </span>
+          <!-- Hierarchical view: show subclusters -->
+          <template v-if="getClusterSubclusters(clusterId)">
+            <SubclusterTree
+              :subclusters="getClusterSubclusters(clusterId)"
+              :depth="0"
+            />
+          </template>
+
+          <!-- Flat view: show articles directly -->
+          <template v-else>
+            <div
+              v-for="item in getClusterArticles(clusterId)"
+              :key="item.id"
+              class="cluster-item"
+              @click="goToArticle(item.id, $event)"
+            >
+              <div class="item-header">
+                <span class="badge">{{ sourceDomain(item.source_url) }}</span>
+                <span class="badge badge-secondary">{{ item.hit_count }} hits</span>
+                <span v-if="item.similarity" class="badge">
+                  {{ Math.round(item.similarity * 100) }}% match
+                </span>
+              </div>
+              <h3 class="item-title">{{ item.title }}</h3>
+              <p v-if="item.summary" class="item-summary">{{ item.summary }}</p>
+              <p class="text-muted item-date">{{ formatRelativeTime(item.first_seen_at) }}</p>
             </div>
-            <h3 class="item-title">{{ item.title }}</h3>
-            <p v-if="item.summary" class="item-summary">{{ item.summary }}</p>
-            <p class="text-muted item-date">{{ formatRelativeTime(item.first_seen_at) }}</p>
-          </div>
+          </template>
         </div>
       </div>
     </div>
@@ -273,6 +307,11 @@ onMounted(async () => {
 .badge-count {
   background: var(--primary-color);
   color: white;
+}
+
+.badge-subtopics {
+  background: rgba(79, 70, 229, 0.12);
+  color: var(--primary-color);
 }
 
 .newest-time {

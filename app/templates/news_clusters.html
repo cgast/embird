@@ -130,6 +130,68 @@ document.addEventListener('DOMContentLoaded', function() {
         return newsElement;
     }
 
+    function countSubclusters(subclusters) {
+        if (!subclusters || subclusters.length <= 1) return 0;
+        let count = subclusters.length;
+        subclusters.forEach(sub => {
+            if (sub.subclusters && sub.subclusters.length > 1) {
+                count += countSubclusters(sub.subclusters);
+            }
+        });
+        return count;
+    }
+
+    function renderSubclusterTree(subclusters, container, depth) {
+        if (!subclusters) return;
+
+        subclusters.forEach((subcluster, subIndex) => {
+            const subDiv = document.createElement('div');
+            subDiv.className = 'subcluster';
+            subDiv.style.marginLeft = (depth * 0.5) + 'rem';
+            if (depth > 0) {
+                const colors = ['#0d6efd', '#7c3aed', '#2563eb', '#0891b2'];
+                subDiv.style.borderLeftColor = colors[Math.min(depth, colors.length - 1)];
+            }
+
+            const hasChildren = subcluster.subclusters && subcluster.subclusters.length > 1;
+
+            const details = document.createElement('details');
+            details.className = 'subcluster-details';
+
+            const summary = document.createElement('summary');
+            summary.className = 'subcluster-header';
+            summary.innerHTML = `
+                <div class="d-flex justify-content-between align-items-center">
+                    <span class="subcluster-name fw-semibold">${subcluster.name || 'Subtopic ' + (subIndex + 1)}</span>
+                    <span>
+                        ${hasChildren ? '<span class="badge bg-secondary me-1">' + subcluster.subclusters.length + ' subtopics</span>' : ''}
+                        <span class="badge bg-info">${subcluster.articles.length} articles</span>
+                    </span>
+                </div>
+            `;
+            details.appendChild(summary);
+
+            if (hasChildren) {
+                // Recursive: render child subclusters
+                const childContainer = document.createElement('div');
+                childContainer.className = 'mt-2';
+                renderSubclusterTree(subcluster.subclusters, childContainer, depth + 1);
+                details.appendChild(childContainer);
+            } else {
+                // Leaf: render articles
+                const articlesContainer = document.createElement('div');
+                articlesContainer.className = 'list-group list-group-flush subcluster-articles mt-2';
+                subcluster.articles.forEach(item => {
+                    articlesContainer.appendChild(createArticleElement(item));
+                });
+                details.appendChild(articlesContainer);
+            }
+
+            subDiv.appendChild(details);
+            container.appendChild(subDiv);
+        });
+    }
+
     function displayClusters(clusters) {
         clustersContainer.innerHTML = '';
 
@@ -173,30 +235,18 @@ document.addEventListener('DOMContentLoaded', function() {
             const subclusterContainer = clusterElement.querySelector('.subclusters-container');
             const relatedContainer = clusterElement.querySelector('.related-news');
 
-            // Check if we have subclusters
+            // Check if we have subclusters (recursive tree format)
             if (subclusters && subclusters.length > 1) {
-                // Show subcluster badge
+                // Show subcluster badge with total count
                 const subclusterBadge = clusterElement.querySelector('.subcluster-badge');
                 subclusterBadge.style.display = 'inline-block';
-                clusterElement.querySelector('.subcluster-count').textContent = subclusters.length;
+                clusterElement.querySelector('.subcluster-count').textContent = countSubclusters(subclusters);
 
                 // Hide flat related news container
                 relatedContainer.style.display = 'none';
 
-                // Render subclusters
-                subclusters.forEach((subcluster, subIndex) => {
-                    const subElement = subclusterTemplate.content.cloneNode(true);
-
-                    subElement.querySelector('.subcluster-name').textContent = subcluster.name || `Subtopic ${subIndex + 1}`;
-                    subElement.querySelector('.subcluster-article-count').textContent = subcluster.articles.length;
-
-                    const subArticlesContainer = subElement.querySelector('.subcluster-articles');
-                    subcluster.articles.forEach(item => {
-                        subArticlesContainer.appendChild(createArticleElement(item));
-                    });
-
-                    subclusterContainer.appendChild(subElement);
-                });
+                // Render recursive subcluster tree
+                renderSubclusterTree(subclusters, subclusterContainer, 0);
             } else {
                 // Hide subclusters container in flat mode
                 subclusterContainer.style.display = 'none';
