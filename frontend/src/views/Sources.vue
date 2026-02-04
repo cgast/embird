@@ -158,6 +158,7 @@ onMounted(() => {
                 {{ source.url }}
               </a>
               <p class="text-muted source-date">Added: {{ formatDate(source.created_at) }}</p>
+              <p class="text-muted source-date">Last crawled: {{ source.last_crawled_at ? formatDate(source.last_crawled_at) : 'Not yet crawled' }}</p>
             </div>
             <div class="source-actions">
               <button @click="deleteSource(source.id)" class="btn btn-sm btn-outline">Delete</button>

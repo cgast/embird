@@ -1,5 +1,5 @@
 <script setup>
-import { ref } from 'vue'
+import { ref, onMounted } from 'vue'
 import NewsCard from '../components/NewsCard.vue'
 
 const searchQuery = ref('')
@@ -7,6 +7,28 @@ const searchResults = ref([])
 const loading = ref(false)
 const error = ref(null)
 const searched = ref(false)
+const sourceFilter = ref('')
+const sources = ref([])
+
+const fetchSources = async () => {
+  try {
+    const response = await fetch('/api/urls')
+    if (!response.ok) throw new Error('Failed to fetch sources')
+    const urls = await response.json()
+    sources.value = urls.map(u => u.url).sort()
+  } catch (err) {
+    console.error('Error fetching sources:', err)
+  }
+}
+
+const getDomain = (urlString) => {
+  try {
+    const url = new URL(urlString)
+    return url.hostname.replace('www.', '')
+  } catch {
+    return urlString
+  }
+}
 
 const performSearch = async () => {
   if (!searchQuery.value.trim()) {
@@ -19,9 +41,14 @@ const performSearch = async () => {
     error.value = null
     searched.value = true
 
-    const response = await fetch(
-      `/api/news/search?query=${encodeURIComponent(searchQuery.value.trim())}&limit=20`
-    )
+    const params = new URLSearchParams()
+    params.append('query', searchQuery.value.trim())
+    params.append('limit', '20')
+    if (sourceFilter.value) {
+      params.append('source_url', sourceFilter.value)
+    }
+
+    const response = await fetch(`/api/news/search?${params}`)
 
     if (!response.ok) {
       const errorData = await response.json()
@@ -43,6 +70,10 @@ const handleKeypress = (event) => {
     performSearch()
   }
 }
+
+onMounted(() => {
+  fetchSources()
+})
 </script>
 
 <template>
@@ -68,6 +99,27 @@ const handleKeypress = (event) => {
       >
         {{ loading ? 'Searching...' : 'Search' }}
       </button>
+    </div>
+
+    <!-- Source filter -->
+    <div v-if="sources.length > 0" class="source-filter">
+      <h3>Filter by Source</h3>
+      <div class="source-tags">
+        <button
+          :class="['source-tag', { active: sourceFilter === '' }]"
+          @click="sourceFilter = ''"
+        >
+          All Sources
+        </button>
+        <button
+          v-for="source in sources"
+          :key="source"
+          :class="['source-tag', { active: sourceFilter === source }]"
+          @click="sourceFilter = source"
+        >
+          {{ getDomain(source) }}
+        </button>
+      </div>
     </div>
 
     <!-- Loading state -->
@@ -157,6 +209,52 @@ const handleKeypress = (event) => {
 .search-box .btn:disabled {
   opacity: 0.6;
   cursor: not-allowed;
+}
+
+.source-filter {
+  margin-bottom: 2rem;
+  padding: 1.5rem;
+  background: var(--surface-color);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  max-width: 800px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.source-filter h3 {
+  font-size: 1rem;
+  font-weight: 600;
+  margin-bottom: 1rem;
+  color: var(--text-color);
+}
+
+.source-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.source-tag {
+  padding: 0.5rem 1rem;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  background: var(--bg-color);
+  color: var(--text-color);
+  font-size: 0.875rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.source-tag:hover {
+  border-color: var(--primary-color);
+  background: var(--surface-color);
+}
+
+.source-tag.active {
+  background: var(--primary-color);
+  color: white;
+  border-color: var(--primary-color);
 }
 
 .loading-container {

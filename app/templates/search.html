@@ -23,11 +23,22 @@
         <div class="card mb-4">
             <div class="card-body">
                 <form id="searchForm" class="mb-0">
-                    <div class="input-group">
-                        <input type="text" id="searchQuery" class="form-control form-control-lg" 
+                    <div class="input-group mb-2">
+                        <input type="text" id="searchQuery" class="form-control form-control-lg"
                                placeholder="Enter your search query..." required>
                         <button class="btn btn-primary" type="submit">Search</button>
                     </div>
+                    {% if urls %}
+                    <div class="mb-2">
+                        <label for="sourceFilter" class="form-label">Filter by Source</label>
+                        <select class="form-select" id="sourceFilter">
+                            <option value="">All Sources</option>
+                            {% for url in urls %}
+                            <option value="{{ url.url }}">{{ url.url }} ({{ url.type }})</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    {% endif %}
                     <div class="form-text">
                         Try queries like "climate change impact on agriculture" or "latest technology trends"
                     </div>
@@ -71,31 +82,39 @@
 document.addEventListener('DOMContentLoaded', function() {
     const searchForm = document.getElementById('searchForm');
     const searchQuery = document.getElementById('searchQuery');
+    const sourceFilter = document.getElementById('sourceFilter');
     const resultsContainer = document.getElementById('resultsContainer');
     const searchResults = document.getElementById('searchResults');
     const noResults = document.getElementById('noResults');
     const searchError = document.getElementById('searchError');
     const loadingIndicator = document.getElementById('loadingIndicator');
     const resultsStats = document.getElementById('resultsStats');
-    
+
     searchForm.addEventListener('submit', async function(e) {
         e.preventDefault();
-        
+
         const query = searchQuery.value.trim();
         if (!query) return;
-        
+
         // Show loading, hide results
         loadingIndicator.classList.remove('d-none');
         resultsContainer.classList.add('d-none');
         noResults.classList.add('d-none');
         searchError.classList.add('d-none');
-        
+
         try {
             // Get the base URL from the current location
             const baseUrl = window.location.pathname.split('/search')[0] || '';
-            
+
+            // Build search URL with optional source filter
+            const params = new URLSearchParams();
+            params.append('query', query);
+            if (sourceFilter && sourceFilter.value) {
+                params.append('source_url', sourceFilter.value);
+            }
+
             // Perform search using absolute path
-            const response = await fetch(`${baseUrl}/api/news/search?query=${encodeURIComponent(query)}`, {
+            const response = await fetch(`${baseUrl}/api/news/search?${params}`, {
                 headers: {
                     'Accept': 'application/json'
                 }

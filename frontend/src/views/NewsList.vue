@@ -12,6 +12,17 @@ const error = ref(null)
 const sourceFilter = ref('')
 const sources = ref([])
 
+const fetchSources = async () => {
+  try {
+    const response = await fetch('/api/urls')
+    if (!response.ok) throw new Error('Failed to fetch sources')
+    const urls = await response.json()
+    sources.value = urls.map(u => u.url).sort()
+  } catch (err) {
+    console.error('Error fetching sources:', err)
+  }
+}
+
 const fetchNews = async () => {
   try {
     loading.value = true
@@ -27,10 +38,6 @@ const fetchNews = async () => {
     if (!response.ok) throw new Error('Failed to fetch news')
 
     news.value = await response.json()
-
-    // Extract unique sources
-    const uniqueSources = [...new Set(news.value.map(item => item.source_url))]
-    sources.value = uniqueSources.sort()
 
   } catch (err) {
     error.value = err.message
@@ -64,6 +71,7 @@ const getDomain = (urlString) => {
 // Initialize source filter from URL on mount
 onMounted(() => {
   sourceFilter.value = route.query.source_url || ''
+  fetchSources()
   fetchNews()
 })
 
