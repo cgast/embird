@@ -78,6 +78,14 @@ class Crawler:
         except Exception as e:
             logger.error(f"Error crawling {url_item.url}: {str(e)}")
 
+    async def run_cleanup(self):
+        """Run cleanup of old news items once per crawl cycle."""
+        try:
+            async with AsyncSessionLocal() as session:
+                await self._cleanup_old_news(session)
+        except Exception as e:
+            logger.error(f"Error during scheduled cleanup: {str(e)}")
+
     async def _crawl_rss(self, url_item: URL):
         """Crawl an RSS feed."""
         try:
@@ -152,8 +160,11 @@ class Crawler:
                 
             return content
             
+        except httpx.HTTPStatusError as e:
+            logger.error(f"HTTP error fetching content from {url}: {str(e)} (status {e.response.status_code})")
+            return None
         except httpx.HTTPError as e:
-            logger.error(f"HTTP error fetching content from {url}: {str(e)}\nFor more information check: https://httpstatuses.com/{e.response.status_code}")
+            logger.error(f"HTTP error fetching content from {url}: {str(e)}")
             return None
         except Exception as e:
             logger.error(f"Error fetching content from {url}: {str(e)}")
@@ -168,9 +179,6 @@ class Crawler:
         try:
             # Create a database session
             async with AsyncSessionLocal() as session:
-                # Run cleanup before processing new items
-                await self._cleanup_old_news(session)
-
                 # Check if the URL already exists in the database
                 result = await session.execute(select(NewsItem).filter(NewsItem.url == url))
                 existing_item = result.scalars().first()
@@ -237,13 +245,16 @@ async def start_crawler():
         logger.info("Crawler service initialized")
         
         while True:
+            # Run cleanup once per cycle, not per article
+            await crawler.run_cleanup()
+
             # Get all URLs to crawl
             urls = url_db.get_all_urls()
-            
+
             # Crawl each URL
             for url in urls:
                 await crawler.crawl_url(url)
-            
+
             # Sleep for the configured interval
             logger.info(f"Crawler cycle completed, sleeping for {settings.CRAWLER_INTERVAL} seconds")
             await asyncio.sleep(settings.CRAWLER_INTERVAL)

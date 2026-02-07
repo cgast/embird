@@ -128,50 +128,81 @@ class ContentExtractor:
             return text[:self.max_summary_length] + "..."
         return text
     
+    # Domains/patterns to skip when extracting links (non-article destinations)
+    SKIP_DOMAINS = {
+        'facebook.com', 'twitter.com', 'x.com', 'instagram.com', 'linkedin.com',
+        'youtube.com', 'tiktok.com', 'pinterest.com', 'reddit.com',
+        'google.com', 'googleapis.com', 'gstatic.com',
+        'apple.com', 'play.google.com',
+        'cdn.', 'fonts.', 'ajax.',
+    }
+    SKIP_EXTENSIONS = {'.png', '.jpg', '.jpeg', '.gif', '.svg', '.css', '.js', '.ico', '.woff', '.woff2', '.ttf', '.mp4', '.mp3', '.pdf'}
+
+    def _should_skip_url(self, url: str) -> bool:
+        """Check if a URL should be skipped (non-article content)."""
+        parsed = urlparse(url)
+        domain = parsed.netloc.lower()
+        path = parsed.path.lower()
+
+        for skip in self.SKIP_DOMAINS:
+            if skip in domain:
+                return True
+
+        for ext in self.SKIP_EXTENSIONS:
+            if path.endswith(ext):
+                return True
+
+        return False
+
     def extract_links(self, html: str, base_url: str) -> List[Dict[str, str]]:
         """
-        Extract links from an HTML page.
-        
+        Extract links from an HTML page, including external article links.
+
         Args:
             html: The HTML content
             base_url: The base URL for resolving relative links
-            
+
         Returns:
             List of dictionaries containing link info (title, url)
         """
         links = []
-        
+        seen_urls = set()
+
         try:
             soup = BeautifulSoup(html, "lxml")
-            
-            # Get domain of the base URL for filtering
-            base_domain = urlparse(base_url).netloc
-            
+
+            # Remove nav, footer, and sidebar elements to focus on main content
+            for tag in soup.find_all(['nav', 'footer']):
+                tag.decompose()
+
             # Find all links
             for a_tag in soup.find_all("a", href=True):
                 href = a_tag["href"]
-                
-                # Skip empty links
-                if not href or href.startswith("#"):
+
+                # Skip empty links and anchors
+                if not href or href.startswith("#") or href.startswith("javascript:"):
                     continue
-                
+
                 # Resolve relative URLs
                 absolute_url = urljoin(base_url, href)
-                
-                # Skip URLs from different domains
-                url_domain = urlparse(absolute_url).netloc
-                if not url_domain.endswith(base_domain) and base_domain not in url_domain:
-                    continue
-                
+
                 # Skip non-http URLs
                 if not absolute_url.startswith(("http://", "https://")):
                     continue
-                
+
+                # Skip non-article URLs (social media, assets, etc.)
+                if self._should_skip_url(absolute_url):
+                    continue
+
+                # Skip duplicate URLs
+                if absolute_url in seen_urls:
+                    continue
+
                 # Get title from text or title attribute
                 title = a_tag.get_text(strip=True) or a_tag.get("title", "")
                 if not title:
                     continue
-                
+
                 # Get content around the link to improve title quality
                 parent = a_tag.parent
                 context = ""
@@ -179,20 +210,19 @@ class ContentExtractor:
                     context = parent.get_text(strip=True)
                     if len(context) > 100:
                         context = context[:100]
-                
+
                 # Use context if title is too short
                 if len(title) < 10 and len(context) > len(title):
                     title = context
-                
-                # Add link if not already in the list and title is not too short
+
+                # Add link if title is long enough (likely an article)
                 if len(title) >= 5:
-                    link_info = {"title": title, "url": absolute_url}
-                    if link_info not in links:
-                        links.append(link_info)
-            
+                    seen_urls.add(absolute_url)
+                    links.append({"title": title, "url": absolute_url})
+
             logger.info(f"Extracted {len(links)} links from {base_url}")
             return links
-            
+
         except Exception as e:
             logger.error(f"Error extracting links from {base_url}: {str(e)}")
             return []

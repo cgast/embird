@@ -1,5 +1,4 @@
 import cohere
-import time
 import logging
 import asyncio
 from datetime import datetime, timedelta
@@ -80,14 +79,14 @@ class EmbeddingService:
                 logger.warning(f"Cohere API error (attempt {attempt + 1}/{self.max_retries}): {e}")
                 if "rate" in str(e).lower():
                     # Rate limit hit, wait longer
-                    time.sleep(self.retry_delay * (attempt + 1))
+                    await asyncio.sleep(self.retry_delay * (attempt + 1))
                 elif attempt == self.max_retries - 1:
                     # Last attempt failed
                     logger.error(f"Failed to generate embedding after {self.max_retries} attempts: {e}")
                     return None
                 else:
                     # Other error, wait standard delay
-                    time.sleep(self.retry_delay)
+                    await asyncio.sleep(self.retry_delay)
 
     def _validate_vector(self, vector_data) -> Optional[np.ndarray]:
         """Validate vector from database."""
