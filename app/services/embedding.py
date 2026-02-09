@@ -1,6 +1,7 @@
 import cohere
 import logging
 import asyncio
+import functools
 from datetime import datetime, timedelta
 from typing import List, Optional
 import numpy as np
@@ -59,13 +60,17 @@ class EmbeddingService:
         
         for attempt in range(self.max_retries):
             try:
-                # Use async version if available in your Cohere client
-                # For now, this is a synchronous call
-                response = self.client.embed(
-                    texts=[text],
-                    model="embed-english-v3.0",  # Using v3.0 model which provides 1024-dimensional embeddings
-                    input_type="search_document",  # Required for v3 models
-                    embedding_types=["float"]  # Get float embeddings for maximum precision
+                # Run synchronous Cohere call in a thread pool to avoid blocking the event loop
+                loop = asyncio.get_event_loop()
+                response = await loop.run_in_executor(
+                    None,
+                    functools.partial(
+                        self.client.embed,
+                        texts=[text],
+                        model="embed-english-v3.0",
+                        input_type="search_document",
+                        embedding_types=["float"],
+                    )
                 )
                 
                 # Handle different response types

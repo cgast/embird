@@ -110,9 +110,12 @@ class Crawler:
                 # Process each item
                 tasks.append(self._process_news_item(title, link, url_item.url))
             
-            # Wait for all tasks to complete
-            await asyncio.gather(*tasks)
-            
+            # Wait for all tasks to complete; return_exceptions prevents one failure from cancelling the rest
+            results = await asyncio.gather(*tasks, return_exceptions=True)
+            for r in results:
+                if isinstance(r, Exception):
+                    logger.error(f"Error processing RSS item from {url_item.url}: {r}")
+
         except httpx.HTTPError as e:
             logger.error(f"HTTP error crawling RSS feed {url_item.url}: {str(e)}")
         except Exception as e:
@@ -137,9 +140,12 @@ class Crawler:
                     url_item.url
                 ))
             
-            # Wait for all tasks to complete
-            await asyncio.gather(*tasks)
-            
+            # Wait for all tasks to complete; return_exceptions prevents one failure from cancelling the rest
+            results = await asyncio.gather(*tasks, return_exceptions=True)
+            for r in results:
+                if isinstance(r, Exception):
+                    logger.error(f"Error processing homepage link from {url_item.url}: {r}")
+
         except httpx.HTTPError as e:
             logger.error(f"HTTP error crawling homepage {url_item.url}: {str(e)}")
         except Exception as e:
@@ -191,26 +197,26 @@ class Crawler:
                     logger.info(f"Updated existing news item: {title}")
                 else:
                     # Get content and summary for new item
+                    summary = None
                     content_info = await self._fetch_content(url)
-                    
-                    if not content_info:
-                        logger.warning(f"Failed to extract content from {url}")
-                        return
-                    
+
+                    if content_info:
+                        summary = content_info["summary"]
+                    else:
+                        logger.warning(f"Content extraction failed for {url}, saving with title only")
+
                     # Create embedding based on settings
-                    text_for_embedding = title if settings.EMBED_TITLE_ONLY else f"{title}. {content_info['summary']}"
+                    text_for_embedding = title if settings.EMBED_TITLE_ONLY else f"{title}. {summary or ''}"
                     embedding = await self.embedding_service.get_embedding(text_for_embedding)
-                    
-                    # Skip if embedding generation failed
+
                     if not embedding:
-                        logger.warning(f"Failed to generate embedding for {url}")
-                        return
-                    
+                        logger.warning(f"Embedding generation failed for {url}, saving without embedding")
+
                     # Create new news item with timezone-aware UTC time
                     now = datetime.now(timezone.utc)
                     news_item = NewsItem(
                         title=title,
-                        summary=content_info["summary"],
+                        summary=summary,
                         url=url,
                         source_url=source_url,
                         first_seen_at=now,
@@ -218,7 +224,7 @@ class Crawler:
                         hit_count=1,
                         embedding=embedding
                     )
-                    
+
                     # Add to database
                     session.add(news_item)
                     await session.commit()
