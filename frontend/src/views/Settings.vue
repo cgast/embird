@@ -211,42 +211,8 @@ onMounted(() => {
   <div class="container">
     <div class="settings-header">
       <h1>Settings</h1>
-      <p class="text-muted">Manage your account, preferences, and news sources</p>
+      <p class="text-muted">Manage your preferences and news sources</p>
     </div>
-
-    <!-- Login section -->
-    <section class="login-section">
-      <div v-if="isLoggedIn" class="login-status">
-        <div class="login-status-info">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
-            <circle cx="12" cy="7" r="4"></circle>
-          </svg>
-          <span>Logged in</span>
-        </div>
-        <button @click="handleLogout" class="btn btn-outline btn-sm">Logout</button>
-      </div>
-      <div v-else class="login-form-card">
-        <h2>Login</h2>
-        <p class="text-muted">Sign in to manage settings</p>
-        <div v-if="loginError" class="alert mb-3">
-          <strong>Error:</strong> {{ loginError }}
-        </div>
-        <form @submit.prevent="handleLogin" class="login-form">
-          <div class="form-group">
-            <label>Username</label>
-            <input v-model="loginForm.username" type="text" placeholder="Enter username" required />
-          </div>
-          <div class="form-group">
-            <label>Password</label>
-            <input v-model="loginForm.password" type="password" placeholder="Enter password" required />
-          </div>
-          <button type="submit" class="btn btn-primary" :disabled="loginLoading">
-            {{ loginLoading ? 'Signing in...' : 'Sign in' }}
-          </button>
-        </form>
-      </div>
-    </section>
 
     <!-- Tabs -->
     <div class="tabs">
@@ -276,11 +242,11 @@ onMounted(() => {
       <div class="card mb-4">
         <div class="card-header">
           <h2>Preference Vectors</h2>
-          <button v-if="!showAddVectorForm" @click="showAddVectorForm = true" class="btn btn-primary btn-sm">
+          <button v-if="isLoggedIn && !showAddVectorForm" @click="showAddVectorForm = true" class="btn btn-primary btn-sm">
             + Add Vector
           </button>
         </div>
-        <div v-if="showAddVectorForm" class="card-body">
+        <div v-if="isLoggedIn && showAddVectorForm" class="card-body">
           <form @submit.prevent="createVector">
             <div class="form-group mb-3">
               <label>Title</label>
@@ -310,7 +276,7 @@ onMounted(() => {
       <div v-else-if="vectors.length > 0" class="card">
         <div class="vectors-table">
           <div v-for="vector in vectors" :key="vector.id" class="vector-row">
-            <template v-if="editingVectorId === vector.id">
+            <template v-if="isLoggedIn && editingVectorId === vector.id">
               <div class="vector-edit-form">
                 <div class="form-group">
                   <label>Title</label>
@@ -332,7 +298,7 @@ onMounted(() => {
                 <p class="vector-description">{{ vector.description }}</p>
                 <p class="text-muted vector-date">Created: {{ formatDate(vector.created_at) }}</p>
               </div>
-              <div class="vector-actions">
+              <div v-if="isLoggedIn" class="vector-actions">
                 <button @click="startEditVector(vector)" class="btn btn-sm btn-outline">Edit</button>
                 <button @click="deleteVector(vector.id)" class="btn btn-sm btn-outline">Delete</button>
               </div>
@@ -343,7 +309,7 @@ onMounted(() => {
 
       <!-- Empty state -->
       <div v-else class="empty-state">
-        <p class="text-muted">No preference vectors found. Add one using the button above.</p>
+        <p class="text-muted">No preference vectors found.</p>
       </div>
     </div>
 
@@ -359,11 +325,11 @@ onMounted(() => {
       <div class="card mb-4">
         <div class="card-header">
           <h2>News Sources</h2>
-          <button v-if="!showAddSourceForm" @click="showAddSourceForm = true" class="btn btn-primary btn-sm">
+          <button v-if="isLoggedIn && !showAddSourceForm" @click="showAddSourceForm = true" class="btn btn-primary btn-sm">
             + Add Source
           </button>
         </div>
-        <div v-if="showAddSourceForm" class="card-body">
+        <div v-if="isLoggedIn && showAddSourceForm" class="card-body">
           <form @submit.prevent="addSource">
             <div class="form-group mb-3">
               <label>Source Type</label>
@@ -405,7 +371,7 @@ onMounted(() => {
               <p class="text-muted source-date">Added: {{ formatDate(source.created_at) }}</p>
               <p class="text-muted source-date">Last crawled: {{ source.last_crawled_at ? formatDate(source.last_crawled_at) : 'Not yet crawled' }}</p>
             </div>
-            <div class="source-actions">
+            <div v-if="isLoggedIn" class="source-actions">
               <button @click="deleteSource(source.id)" class="btn btn-sm btn-outline">Delete</button>
             </div>
           </div>
@@ -419,9 +385,43 @@ onMounted(() => {
           <path d="M4 4a16 16 0 0 1 16 16"></path>
           <circle cx="5" cy="19" r="1"></circle>
         </svg>
-        <p class="text-muted">No sources configured. Add your first source above.</p>
+        <p class="text-muted">No sources configured.</p>
       </div>
     </div>
+
+    <!-- Login section at the bottom -->
+    <section class="login-section">
+      <div v-if="isLoggedIn" class="login-status">
+        <div class="login-status-info">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+            <circle cx="12" cy="7" r="4"></circle>
+          </svg>
+          <span>Logged in</span>
+        </div>
+        <button @click="handleLogout" class="btn btn-outline btn-sm">Logout</button>
+      </div>
+      <div v-else class="login-form-card">
+        <h2>Login</h2>
+        <p class="text-muted">Login to edit preference vectors and sources</p>
+        <div v-if="loginError" class="alert mb-3">
+          <strong>Error:</strong> {{ loginError }}
+        </div>
+        <form @submit.prevent="handleLogin" class="login-form">
+          <div class="form-group">
+            <label>Email</label>
+            <input v-model="loginForm.username" type="text" placeholder="Enter email" required />
+          </div>
+          <div class="form-group">
+            <label>Password</label>
+            <input v-model="loginForm.password" type="password" placeholder="Enter password" required />
+          </div>
+          <button type="submit" class="btn btn-primary" :disabled="loginLoading">
+            {{ loginLoading ? 'Signing in...' : 'Sign in' }}
+          </button>
+        </form>
+      </div>
+    </section>
   </div>
 </template>
 
@@ -439,7 +439,7 @@ onMounted(() => {
 
 /* Login section */
 .login-section {
-  margin-bottom: 2rem;
+  margin-top: 2rem;
 }
 
 .login-status {

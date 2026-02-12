@@ -9,6 +9,10 @@ class Settings(BaseSettings):
     ENABLE_URL_MANAGEMENT: bool = os.environ.get("ENABLE_URL_MANAGEMENT", "True").lower() in ("true", "1", "t")
     ENABLE_PREFERENCE_MANAGEMENT: bool = os.environ.get("ENABLE_PREFERENCE_MANAGEMENT", "True").lower() in ("true", "1", "t")
     ENABLE_PREFERENCE_VECTORS: bool = os.environ.get("ENABLE_PREFERENCE_VECTORS", "True").lower() in ("true", "1", "t")
+
+    # Authentication
+    ADMIN_EMAIL: str = os.environ.get("ADMIN_EMAIL", "admin@admin.com")
+    ADMIN_PASSWORD: str = os.environ.get("ADMIN_PASSWORD", "adminadminadmin")
     
     # Database
     DATABASE_URL: str = os.environ.get("DATABASE_URL", "postgresql://postgres:postgres@postgres:5432/newsdb")
