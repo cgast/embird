@@ -6,23 +6,17 @@ import './style.css'
 // Import views
 import ClusterHome from './views/ClusterHome.vue'
 import Dashboard from './views/Dashboard.vue'
-import NewsList from './views/NewsList.vue'
+import Archive from './views/Archive.vue'
 import NewsDetail from './views/NewsDetail.vue'
-import Search from './views/Search.vue'
-import UmapVisual from './views/UmapVisual.vue'
-import PreferenceVectors from './views/PreferenceVectors.vue'
-import Sources from './views/Sources.vue'
+import Settings from './views/Settings.vue'
 
 // Define routes
 const routes = [
   { path: '/', name: 'home', component: ClusterHome },
   { path: '/dashboard', name: 'dashboard', component: Dashboard },
-  { path: '/news', name: 'news', component: NewsList },
+  { path: '/archive', name: 'archive', component: Archive },
   { path: '/news/:id', name: 'news-detail', component: NewsDetail },
-  { path: '/search', name: 'search', component: Search },
-  { path: '/umap', name: 'umap', component: UmapVisual },
-  { path: '/preference-vectors', name: 'preferences', component: PreferenceVectors },
-  { path: '/urls', name: 'sources', component: Sources },
+  { path: '/settings', name: 'settings', component: Settings },
 ]
 
 // Create router

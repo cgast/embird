@@ -1,9 +1,20 @@
 <script setup>
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, onUnmounted, computed, nextTick, defineAsyncComponent } from 'vue'
+import * as d3 from 'd3'
 
 const stats = ref(null)
 const loading = ref(true)
 const error = ref(null)
+
+// UMAP lazy-loading state
+const umapSentinel = ref(null)
+const umapVisible = ref(false)
+const umapLoading = ref(false)
+const umapError = ref(null)
+const umapData = ref([])
+const svgContainer = ref(null)
+const tooltip = ref(null)
+let observer = null
 
 const fetchStats = async () => {
   try {
@@ -62,8 +73,236 @@ const formatDate = (isoString) => {
   return d.toLocaleDateString([], { month: 'short', day: 'numeric' })
 }
 
+// UMAP visualization methods
+const getHostname = (url) => {
+  if (!url) return 'Unknown source'
+  try {
+    return new URL(url).hostname.replace('www.', '')
+  } catch {
+    return url
+  }
+}
+
+const fetchUmapData = async () => {
+  try {
+    umapLoading.value = true
+    umapError.value = null
+    const response = await fetch('/api/news/umap')
+    if (!response.ok) throw new Error('Failed to fetch UMAP data')
+    umapData.value = await response.json()
+    await nextTick()
+    renderVisualization()
+  } catch (err) {
+    umapError.value = err.message
+    console.error('Error fetching UMAP data:', err)
+  } finally {
+    umapLoading.value = false
+  }
+}
+
+const renderVisualization = () => {
+  if (!umapData.value || umapData.value.length === 0) return
+  if (!svgContainer.value) return
+
+  d3.select(svgContainer.value).selectAll('*').remove()
+
+  const data = umapData.value
+  const width = svgContainer.value.clientWidth || 800
+  const height = 500
+  const margin = { top: 20, right: 140, bottom: 20, left: 20 }
+
+  const xExtent = d3.extent(data, d => d.x)
+  const yExtent = d3.extent(data, d => d.y)
+  const xPadding = (xExtent[1] - xExtent[0]) * 0.05
+  const yPadding = (yExtent[1] - yExtent[0]) * 0.05
+
+  const xScale = d3.scaleLinear()
+    .domain([xExtent[0] - xPadding, xExtent[1] + xPadding])
+    .range([margin.left, width - margin.right])
+
+  const yScale = d3.scaleLinear()
+    .domain([yExtent[0] - yPadding, yExtent[1] + yPadding])
+    .range([height - margin.bottom, margin.top])
+
+  const uniqueClusters = [...new Set(data.map(d => d.cluster_id))].filter(id => id !== undefined && id !== null)
+  const colorScale = d3.scaleOrdinal()
+    .domain(uniqueClusters)
+    .range(d3.schemeCategory10)
+
+  const svg = d3.select(svgContainer.value)
+    .append('svg')
+    .attr('width', width)
+    .attr('height', height)
+    .style('background', 'var(--bg-color)')
+
+  svg.selectAll('circle')
+    .data(data.filter(d => d.type === 'news_item'))
+    .enter()
+    .append('circle')
+    .attr('cx', d => xScale(d.x))
+    .attr('cy', d => yScale(d.y))
+    .attr('r', 5)
+    .attr('fill', d => d.cluster_id !== undefined && d.cluster_id !== null ?
+      colorScale(d.cluster_id) : 'var(--text-muted)')
+    .attr('opacity', d => d.opacity !== undefined ? d.opacity : 0.7)
+    .style('cursor', 'pointer')
+    .on('mouseover', function(event, d) {
+      d3.select(this).attr('r', 8).attr('opacity', 1)
+      if (tooltip.value) {
+        tooltip.value.style.display = 'block'
+        tooltip.value.style.left = (event.pageX + 10) + 'px'
+        tooltip.value.style.top = (event.pageY + 10) + 'px'
+        tooltip.value.querySelector('.tooltip-title').textContent = d.title || 'Untitled'
+        tooltip.value.querySelector('.tooltip-source').textContent = getHostname(d.source_url)
+        tooltip.value.querySelector('.tooltip-cluster').textContent = d.cluster_id !== undefined && d.cluster_id !== null ?
+          `Cluster ${d.cluster_id}` : 'Unclustered'
+      }
+    })
+    .on('mouseout', function(event, d) {
+      d3.select(this).attr('r', 5).attr('opacity', d.opacity !== undefined ? d.opacity : 0.7)
+      if (tooltip.value) { tooltip.value.style.display = 'none' }
+    })
+    .on('click', function(event, d) {
+      if (d.url) { window.open(d.url, '_blank') }
+    })
+
+  const squareSize = 10
+  const prefVectors = data.filter(d => d.type === 'preference_vector')
+
+  svg.selectAll('rect.pref-vector')
+    .data(prefVectors)
+    .enter()
+    .append('rect')
+    .attr('class', 'pref-vector')
+    .attr('x', d => xScale(d.x) - squareSize / 2)
+    .attr('y', d => yScale(d.y) - squareSize / 2)
+    .attr('width', squareSize)
+    .attr('height', squareSize)
+    .attr('fill', 'var(--primary-color)')
+    .attr('stroke', 'var(--surface-color)')
+    .attr('stroke-width', 2)
+    .style('cursor', 'pointer')
+    .on('mouseover', function(event, d) {
+      d3.select(this).attr('stroke-width', 3)
+      if (tooltip.value) {
+        tooltip.value.style.display = 'block'
+        tooltip.value.style.left = (event.pageX + 10) + 'px'
+        tooltip.value.style.top = (event.pageY + 10) + 'px'
+        tooltip.value.querySelector('.tooltip-title').textContent = d.title || 'Preference Vector'
+        tooltip.value.querySelector('.tooltip-source').textContent = 'Preference Vector'
+        tooltip.value.querySelector('.tooltip-cluster').textContent = d.description || ''
+      }
+    })
+    .on('mouseout', function() {
+      d3.select(this).attr('stroke-width', 2)
+      if (tooltip.value) { tooltip.value.style.display = 'none' }
+    })
+
+  svg.selectAll('text.pref-label')
+    .data(prefVectors)
+    .enter()
+    .append('text')
+    .attr('class', 'pref-label')
+    .attr('x', d => xScale(d.x) + squareSize)
+    .attr('y', d => yScale(d.y) + squareSize / 2)
+    .attr('fill', 'var(--text-color)')
+    .attr('font-size', '12px')
+    .text(d => d.title || '')
+
+  // Legend
+  const legendSpacing = 20
+  const legendCircleRadius = 5
+  const legendTextOffset = 10
+  const legend = svg.append('g')
+    .attr('class', 'legend')
+    .attr('transform', `translate(${width - 130}, ${margin.top})`)
+
+  if (uniqueClusters.length > 0) {
+    const legendItems = legend.selectAll('.legend-item-cluster')
+      .data(uniqueClusters)
+      .enter()
+      .append('g')
+      .attr('class', 'legend-item-cluster')
+      .attr('transform', (d, i) => `translate(0, ${i * legendSpacing})`)
+
+    legendItems.append('circle')
+      .attr('r', legendCircleRadius)
+      .attr('fill', d => colorScale(d))
+
+    legendItems.append('text')
+      .attr('x', legendTextOffset)
+      .attr('y', legendCircleRadius / 2)
+      .attr('fill', 'var(--text-color)')
+      .attr('font-size', '12px')
+      .text(d => `Cluster ${d}`)
+  }
+
+  const unclusteredY = uniqueClusters.length * legendSpacing
+  const unclusteredGroup = legend.append('g')
+    .attr('transform', `translate(0, ${unclusteredY})`)
+  unclusteredGroup.append('circle')
+    .attr('r', legendCircleRadius)
+    .attr('fill', 'var(--text-muted)')
+  unclusteredGroup.append('text')
+    .attr('x', legendTextOffset)
+    .attr('y', legendCircleRadius / 2)
+    .attr('fill', 'var(--text-color)')
+    .attr('font-size', '12px')
+    .text('Unclustered')
+
+  const prefVectorY = (uniqueClusters.length + 1) * legendSpacing
+  const prefGroup = legend.append('g')
+    .attr('transform', `translate(0, ${prefVectorY})`)
+  prefGroup.append('rect')
+    .attr('x', -legendCircleRadius)
+    .attr('y', -legendCircleRadius)
+    .attr('width', legendCircleRadius * 2)
+    .attr('height', legendCircleRadius * 2)
+    .attr('fill', 'var(--primary-color)')
+    .attr('stroke', 'var(--surface-color)')
+    .attr('stroke-width', 1)
+  prefGroup.append('text')
+    .attr('x', legendTextOffset)
+    .attr('y', legendCircleRadius / 2)
+    .attr('fill', 'var(--text-color)')
+    .attr('font-size', '12px')
+    .text('Preference Vector')
+}
+
+// Handle window resize for UMAP
+let resizeTimeout
+const handleResize = () => {
+  clearTimeout(resizeTimeout)
+  resizeTimeout = setTimeout(() => {
+    if (umapData.value.length > 0) {
+      renderVisualization()
+    }
+  }, 250)
+}
+
 onMounted(() => {
   fetchStats()
+  window.addEventListener('resize', handleResize)
+
+  // Set up IntersectionObserver for lazy-loading UMAP
+  if (umapSentinel.value) {
+    observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting && !umapVisible.value) {
+          umapVisible.value = true
+          fetchUmapData()
+          observer.disconnect()
+        }
+      },
+      { rootMargin: '200px' }
+    )
+    observer.observe(umapSentinel.value)
+  }
+})
+
+onUnmounted(() => {
+  window.removeEventListener('resize', handleResize)
+  if (observer) observer.disconnect()
 })
 </script>
 
@@ -214,6 +453,40 @@ onMounted(() => {
           </div>
         </div>
         <p v-else class="text-muted">No source data available.</p>
+      </section>
+
+      <!-- UMAP Visualization (lazy loaded) -->
+      <section class="section" ref="umapSentinel">
+        <h2 class="section-title">UMAP Visualization</h2>
+        <p class="text-muted section-sub">2D projection of news articles and preference vectors</p>
+
+        <template v-if="umapVisible">
+          <div v-if="umapLoading" class="loading-container">
+            <div class="spinner"></div>
+            <p class="text-muted">Loading visualization...</p>
+          </div>
+
+          <div v-else-if="umapError" class="alert">
+            <strong>Error:</strong> {{ umapError }}
+          </div>
+
+          <div v-else class="umap-container">
+            <div class="umap-info">
+              <p>Colors represent clusters, transparency indicates article age. Click points to open articles.</p>
+              <p><strong>Data points:</strong> {{ umapData.length }}</p>
+            </div>
+            <div ref="svgContainer" class="svg-container"></div>
+            <div ref="tooltip" class="tooltip-box">
+              <div class="tooltip-title"></div>
+              <div class="tooltip-source"></div>
+              <div class="tooltip-cluster"></div>
+            </div>
+          </div>
+        </template>
+
+        <div v-else class="umap-placeholder">
+          <p class="text-muted">Scroll down to load the UMAP visualization...</p>
+        </div>
       </section>
     </div>
   </div>
@@ -458,6 +731,77 @@ onMounted(() => {
   text-align: right;
 }
 
+/* UMAP section */
+.umap-container {
+  position: relative;
+}
+
+.umap-info {
+  margin-bottom: 1rem;
+  padding: 0.75rem 1rem;
+  background: var(--bg-color);
+  border-radius: 6px;
+}
+
+.umap-info p {
+  color: var(--text-muted);
+  line-height: 1.5;
+  margin-bottom: 0.25rem;
+  font-size: 0.875rem;
+}
+
+.umap-info p:last-child {
+  margin-bottom: 0;
+}
+
+.svg-container {
+  background: var(--bg-color);
+  border-radius: 6px;
+  overflow: hidden;
+  min-height: 500px;
+}
+
+.svg-container :deep(svg) {
+  display: block;
+  width: 100%;
+}
+
+.umap-placeholder {
+  text-align: center;
+  padding: 2rem 0;
+}
+
+.tooltip-box {
+  display: none;
+  position: fixed;
+  background: var(--surface-color);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  padding: 0.75rem 1rem;
+  box-shadow: var(--shadow);
+  z-index: 1000;
+  pointer-events: none;
+  max-width: 300px;
+}
+
+.tooltip-title {
+  font-weight: 600;
+  color: var(--text-color);
+  margin-bottom: 0.25rem;
+  line-height: 1.3;
+}
+
+.tooltip-source {
+  font-size: 0.875rem;
+  color: var(--text-muted);
+}
+
+.tooltip-cluster {
+  font-size: 0.8125rem;
+  color: var(--primary-color);
+  margin-top: 0.25rem;
+}
+
 @media (max-width: 768px) {
   .dashboard-header h1 {
     font-size: 1.5rem;
@@ -474,6 +818,10 @@ onMounted(() => {
   .lifespan-label {
     width: 3rem;
     font-size: 0.75rem;
+  }
+
+  .svg-container {
+    min-height: 350px;
   }
 }
 </style>
