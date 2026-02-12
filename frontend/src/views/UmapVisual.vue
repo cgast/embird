@@ -108,8 +108,8 @@ const renderVisualization = () => {
 
       if (tooltip.value) {
         tooltip.value.style.display = 'block'
-        tooltip.value.style.left = (event.pageX + 10) + 'px'
-        tooltip.value.style.top = (event.pageY + 10) + 'px'
+        tooltip.value.style.left = (event.clientX + 10) + 'px'
+        tooltip.value.style.top = (event.clientY + 10) + 'px'
         tooltip.value.querySelector('.tooltip-title').textContent = d.title || 'Untitled'
         tooltip.value.querySelector('.tooltip-source').textContent = getHostname(d.source_url)
         tooltip.value.querySelector('.tooltip-cluster').textContent = d.cluster_name || 'Unclustered'
@@ -151,8 +151,8 @@ const renderVisualization = () => {
 
       if (tooltip.value) {
         tooltip.value.style.display = 'block'
-        tooltip.value.style.left = (event.pageX + 10) + 'px'
-        tooltip.value.style.top = (event.pageY + 10) + 'px'
+        tooltip.value.style.left = (event.clientX + 10) + 'px'
+        tooltip.value.style.top = (event.clientY + 10) + 'px'
         tooltip.value.querySelector('.tooltip-title').textContent = d.title || 'Preference Vector'
         tooltip.value.querySelector('.tooltip-source').textContent = 'Preference Vector'
         tooltip.value.querySelector('.tooltip-cluster').textContent = d.description || ''
