@@ -5,6 +5,7 @@ from sqlalchemy import select, func, text
 from sqlalchemy.orm import selectinload
 from typing import List, Optional, Dict, Tuple
 from pgvector.sqlalchemy import Vector
+from pydantic import BaseModel
 import time
 import logging
 from datetime import datetime, timedelta
@@ -28,6 +29,21 @@ from app.config import settings
 logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["api"])
+
+
+# ---- Auth Endpoint ----
+
+class LoginRequest(BaseModel):
+    username: str
+    password: str
+
+@router.post("/auth/login")
+async def login(credentials: LoginRequest):
+    """Authenticate with admin credentials."""
+    if (credentials.username == settings.ADMIN_EMAIL and
+            credentials.password == settings.ADMIN_PASSWORD):
+        return {"token": "authenticated"}
+    raise HTTPException(status_code=401, detail="Invalid credentials")
 
 @router.get("/health")
 async def health_check():
