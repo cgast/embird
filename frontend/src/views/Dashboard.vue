@@ -1,5 +1,5 @@
 <script setup>
-import { ref, onMounted, onUnmounted, computed, nextTick } from 'vue'
+import { ref, onMounted, onUnmounted, computed, nextTick, watch } from 'vue'
 import * as d3 from 'd3'
 
 const stats = ref(null)
@@ -87,15 +87,23 @@ const fetchUmapData = async () => {
     const response = await fetch('/api/news/umap')
     if (!response.ok) throw new Error('Failed to fetch UMAP data')
     umapData.value = await response.json()
+    umapLoading.value = false
     await nextTick()
     renderVisualization()
   } catch (err) {
     umapError.value = err.message
-    console.error('Error fetching UMAP data:', err)
-  } finally {
     umapLoading.value = false
+    console.error('Error fetching UMAP data:', err)
   }
 }
+
+// Re-render when svgContainer becomes available (e.g. stats load after UMAP data)
+watch(svgContainer, async (el) => {
+  if (el && umapData.value.length > 0) {
+    await nextTick()
+    renderVisualization()
+  }
+})
 
 const renderVisualization = () => {
   if (!umapData.value || umapData.value.length === 0) return
@@ -126,6 +134,14 @@ const renderVisualization = () => {
     .domain(uniqueClusters)
     .range(d3.schemeCategory10)
 
+  // Build cluster name lookup from data points
+  const clusterNameMap = {}
+  for (const d of data) {
+    if (d.cluster_id != null && d.cluster_name) {
+      clusterNameMap[d.cluster_id] = d.cluster_name
+    }
+  }
+
   const svg = d3.select(svgContainer.value)
     .append('svg')
     .attr('width', width)
@@ -147,12 +163,11 @@ const renderVisualization = () => {
       d3.select(this).attr('r', 8).attr('opacity', 1)
       if (tooltip.value) {
         tooltip.value.style.display = 'block'
-        tooltip.value.style.left = (event.pageX + 10) + 'px'
-        tooltip.value.style.top = (event.pageY + 10) + 'px'
+        tooltip.value.style.left = (event.clientX + 10) + 'px'
+        tooltip.value.style.top = (event.clientY + 10) + 'px'
         tooltip.value.querySelector('.tooltip-title').textContent = d.title || 'Untitled'
         tooltip.value.querySelector('.tooltip-source').textContent = getHostname(d.source_url)
-        tooltip.value.querySelector('.tooltip-cluster').textContent = d.cluster_id !== undefined && d.cluster_id !== null ?
-          `Cluster ${d.cluster_id}` : 'Unclustered'
+        tooltip.value.querySelector('.tooltip-cluster').textContent = d.cluster_name || 'Unclustered'
       }
     })
     .on('mouseout', function(event, d) {
@@ -183,8 +198,8 @@ const renderVisualization = () => {
       d3.select(this).attr('stroke-width', 3)
       if (tooltip.value) {
         tooltip.value.style.display = 'block'
-        tooltip.value.style.left = (event.pageX + 10) + 'px'
-        tooltip.value.style.top = (event.pageY + 10) + 'px'
+        tooltip.value.style.left = (event.clientX + 10) + 'px'
+        tooltip.value.style.top = (event.clientY + 10) + 'px'
         tooltip.value.querySelector('.tooltip-title').textContent = d.title || 'Preference Vector'
         tooltip.value.querySelector('.tooltip-source').textContent = 'Preference Vector'
         tooltip.value.querySelector('.tooltip-cluster').textContent = d.description || ''
@@ -230,8 +245,8 @@ const renderVisualization = () => {
       .attr('x', legendTextOffset)
       .attr('y', legendCircleRadius / 2)
       .attr('fill', 'var(--text-color)')
-      .attr('font-size', '12px')
-      .text(d => `Cluster ${d}`)
+      .attr('font-size', '11px')
+      .text(d => clusterNameMap[d] || `Cluster ${d}`)
   }
 
   const unclusteredY = uniqueClusters.length * legendSpacing
