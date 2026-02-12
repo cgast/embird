@@ -192,6 +192,37 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
+    function sortArticlesByNewest(articles) {
+        return articles.slice().sort((a, b) => {
+            const dateA = new Date(a.last_seen_at || 0);
+            const dateB = new Date(b.last_seen_at || 0);
+            return dateB - dateA;
+        });
+    }
+
+    function sortSubclustersNewest(subclusters) {
+        if (!subclusters) return subclusters;
+        return subclusters.map(sub => ({
+            ...sub,
+            articles: sortArticlesByNewest(sub.articles || []),
+            subclusters: sub.subclusters ? sortSubclustersNewest(sub.subclusters) : sub.subclusters
+        })).sort((a, b) => {
+            const newestA = new Date((a.articles[0] || {}).last_seen_at || 0);
+            const newestB = new Date((b.articles[0] || {}).last_seen_at || 0);
+            return newestB - newestA;
+        });
+    }
+
+    function getNewestDate(clusterData) {
+        const articles = (clusterData && typeof clusterData === 'object' && !Array.isArray(clusterData))
+            ? clusterData.articles : clusterData;
+        if (!articles || articles.length === 0) return new Date(0);
+        return articles.reduce((newest, a) => {
+            const d = new Date(a.last_seen_at || 0);
+            return d > newest ? d : newest;
+        }, new Date(0));
+    }
+
     function displayClusters(clusters) {
         clustersContainer.innerHTML = '';
 
@@ -204,13 +235,18 @@ document.addEventListener('DOMContentLoaded', function() {
             return;
         }
 
-        Object.entries(clusters).forEach(([clusterId, clusterData], index) => {
+        // Sort clusters by newest article date (newest first)
+        const sortedEntries = Object.entries(clusters).sort((a, b) => {
+            return getNewestDate(b[1]) - getNewestDate(a[1]);
+        });
+
+        sortedEntries.forEach(([clusterId, clusterData], index) => {
             const clusterElement = clusterTemplate.content.cloneNode(true);
 
             // Handle both old format (array) and new format (object with articles/subclusters)
             const isNewFormat = clusterData && typeof clusterData === 'object' && !Array.isArray(clusterData);
-            const articles = isNewFormat ? clusterData.articles : clusterData;
-            const subclusters = isNewFormat ? clusterData.subclusters : null;
+            const articles = sortArticlesByNewest(isNewFormat ? clusterData.articles : clusterData);
+            const subclusters = isNewFormat ? sortSubclustersNewest(clusterData.subclusters) : null;
             const clusterName = isNewFormat ? clusterData.name : null;
 
             // Set cluster name if available
