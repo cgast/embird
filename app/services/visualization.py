@@ -315,11 +315,31 @@ async def generate_umap_visualization(db: AsyncSession, hours: int, min_similari
         # First generate clusters to get cluster assignments
         clusters = await generate_clusters(db, hours, min_similarity)
 
-        # Create a mapping of news item ID to cluster ID
+        # Rank clusters by article count and keep only top 20
+        TOP_N_CLUSTERS = 20
+        ranked_cluster_ids = sorted(
+            clusters.keys(),
+            key=lambda cid: len(
+                clusters[cid].get('articles', clusters[cid])
+                if isinstance(clusters[cid], dict) else clusters[cid]
+            ),
+            reverse=True
+        )[:TOP_N_CLUSTERS]
+        top_clusters = set(ranked_cluster_ids)
+
+        # Create mappings of news item ID to cluster ID and cluster names
         item_to_cluster = {}
+        cluster_names = {}
         for cluster_id, cluster_data in clusters.items():
+            if cluster_id not in top_clusters:
+                continue
             # Handle both old format (list) and new format (dict with 'articles' key)
-            articles = cluster_data.get('articles', cluster_data) if isinstance(cluster_data, dict) else cluster_data
+            if isinstance(cluster_data, dict):
+                articles = cluster_data.get('articles', cluster_data)
+                cluster_names[cluster_id] = cluster_data.get('name', f'Cluster {cluster_id}')
+            else:
+                articles = cluster_data
+                cluster_names[cluster_id] = f'Cluster {cluster_id}'
             for item in articles:
                 item_to_cluster[item['id']] = cluster_id
 
@@ -351,8 +371,10 @@ async def generate_umap_visualization(db: AsyncSession, hours: int, min_similari
         all_items = []
         is_pref_vector = []  # Track which items are preference vectors
 
-        # Add news item embeddings
+        # Add news item embeddings (only items in top clusters)
         for item in news_items:
+            if item.id not in item_to_cluster:
+                continue
             try:
                 # Convert pgvector to numpy array
                 vector = np.array(item.embedding.tolist(), dtype=np.float32)
@@ -433,6 +455,7 @@ async def generate_umap_visualization(db: AsyncSession, hours: int, min_similari
                             hours_old = (now - last_seen).total_seconds() / 3600
                             opacity = 0.8 - (0.6 * (hours_old - 1) / 23)
                         
+                        cid = item_to_cluster.get(item.id)
                         visualization_data.append({
                             "id": item.id,
                             "title": item.title,
@@ -441,7 +464,8 @@ async def generate_umap_visualization(db: AsyncSession, hours: int, min_similari
                             "last_seen_at": item.last_seen_at.isoformat() if item.last_seen_at else None,
                             "x": float(umap_result[i][0]),
                             "y": float(umap_result[i][1]),
-                            "cluster_id": item_to_cluster.get(item.id),
+                            "cluster_id": cid,
+                            "cluster_name": cluster_names.get(cid) if cid is not None else None,
                             "type": "news_item",
                             "opacity": opacity
                         })

@@ -17,14 +17,14 @@ const fetchUmapData = async () => {
     if (!response.ok) throw new Error('Failed to fetch UMAP data')
 
     umapData.value = await response.json()
+    loading.value = false
     await nextTick()
     renderVisualization()
 
   } catch (err) {
     error.value = err.message
-    console.error('Error fetching UMAP data:', err)
-  } finally {
     loading.value = false
+    console.error('Error fetching UMAP data:', err)
   }
 }
 
@@ -49,8 +49,10 @@ const renderVisualization = () => {
 
   // Setup dimensions
   const width = svgContainer.value.clientWidth || 800
-  const height = 600
-  const margin = { top: 20, right: 140, bottom: 20, left: 20 }
+  const numClusters = [...new Set(data.map(d => d.cluster_id))].filter(id => id !== undefined && id !== null).length
+  const legendHeight = (numClusters + 2) * 20 + 40 // clusters + pref vector + padding
+  const height = Math.max(600, legendHeight)
+  const margin = { top: 20, right: 200, bottom: 20, left: 20 }
 
   // Create scales
   const xExtent = d3.extent(data, d => d.x)
@@ -71,6 +73,14 @@ const renderVisualization = () => {
   const colorScale = d3.scaleOrdinal()
     .domain(uniqueClusters)
     .range(d3.schemeCategory10)
+
+  // Build cluster name lookup from data points
+  const clusterNameMap = {}
+  for (const d of data) {
+    if (d.cluster_id != null && d.cluster_name) {
+      clusterNameMap[d.cluster_id] = d.cluster_name
+    }
+  }
 
   // Create SVG
   const svg = d3.select(svgContainer.value)
@@ -102,8 +112,7 @@ const renderVisualization = () => {
         tooltip.value.style.top = (event.pageY + 10) + 'px'
         tooltip.value.querySelector('.tooltip-title').textContent = d.title || 'Untitled'
         tooltip.value.querySelector('.tooltip-source').textContent = getHostname(d.source_url)
-        tooltip.value.querySelector('.tooltip-cluster').textContent = d.cluster_id !== undefined && d.cluster_id !== null ?
-          `Cluster ${d.cluster_id}` : 'Unclustered'
+        tooltip.value.querySelector('.tooltip-cluster').textContent = d.cluster_name || 'Unclustered'
       }
     })
     .on('mouseout', function(event, d) {
@@ -174,7 +183,7 @@ const renderVisualization = () => {
   const legendTextOffset = 10
   const legend = svg.append('g')
     .attr('class', 'legend')
-    .attr('transform', `translate(${width - 130}, ${margin.top})`)
+    .attr('transform', `translate(${width - margin.right + 10}, ${margin.top})`)
 
   // Add cluster legend items
   if (uniqueClusters.length > 0) {
@@ -193,28 +202,12 @@ const renderVisualization = () => {
       .attr('x', legendTextOffset)
       .attr('y', legendCircleRadius / 2)
       .attr('fill', 'var(--text-color)')
-      .attr('font-size', '12px')
-      .text(d => `Cluster ${d}`)
+      .attr('font-size', '11px')
+      .text(d => clusterNameMap[d] || `Cluster ${d}`)
   }
 
-  // Add unclustered legend item
-  const unclusteredY = uniqueClusters.length * legendSpacing
-  const unclusteredGroup = legend.append('g')
-    .attr('transform', `translate(0, ${unclusteredY})`)
-
-  unclusteredGroup.append('circle')
-    .attr('r', legendCircleRadius)
-    .attr('fill', 'var(--text-muted)')
-
-  unclusteredGroup.append('text')
-    .attr('x', legendTextOffset)
-    .attr('y', legendCircleRadius / 2)
-    .attr('fill', 'var(--text-color)')
-    .attr('font-size', '12px')
-    .text('Unclustered')
-
   // Add preference vector legend item
-  const prefVectorY = (uniqueClusters.length + 1) * legendSpacing
+  const prefVectorY = uniqueClusters.length * legendSpacing
   const prefGroup = legend.append('g')
     .attr('transform', `translate(0, ${prefVectorY})`)
 
