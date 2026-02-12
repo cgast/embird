@@ -51,12 +51,9 @@ const toggleMobileMenu = () => {
         <!-- Desktop menu -->
         <div class="navbar-menu desktop-menu">
           <router-link to="/" :class="{ active: route.name === 'home' }">Home</router-link>
-          <router-link to="/news" :class="{ active: route.name === 'news' }">News</router-link>
-          <router-link to="/search" :class="{ active: route.name === 'search' }">Search</router-link>
-          <router-link to="/umap" :class="{ active: route.name === 'umap' }">UMAP</router-link>
+          <router-link to="/archive" :class="{ active: route.name === 'archive' }">Archive</router-link>
           <router-link to="/dashboard" :class="{ active: route.name === 'dashboard' }">Dashboard</router-link>
-          <router-link to="/preference-vectors" :class="{ active: route.name === 'preferences' }">Preferences</router-link>
-          <router-link to="/urls" :class="{ active: route.name === 'sources' }">Sources</router-link>
+          <router-link to="/settings" :class="{ active: route.name === 'settings' }">Settings</router-link>
 
           <button @click="toggleTheme" class="theme-toggle">
             <svg v-if="theme === 'light'" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -79,12 +76,9 @@ const toggleMobileMenu = () => {
         <!-- Mobile menu -->
         <div v-if="mobileMenuOpen" class="navbar-menu mobile-menu">
           <router-link to="/" :class="{ active: route.name === 'home' }" @click="toggleMobileMenu">Home</router-link>
-          <router-link to="/news" :class="{ active: route.name === 'news' }" @click="toggleMobileMenu">News</router-link>
-          <router-link to="/search" :class="{ active: route.name === 'search' }" @click="toggleMobileMenu">Search</router-link>
-          <router-link to="/umap" :class="{ active: route.name === 'umap' }" @click="toggleMobileMenu">UMAP</router-link>
+          <router-link to="/archive" :class="{ active: route.name === 'archive' }" @click="toggleMobileMenu">Archive</router-link>
           <router-link to="/dashboard" :class="{ active: route.name === 'dashboard' }" @click="toggleMobileMenu">Dashboard</router-link>
-          <router-link to="/preference-vectors" :class="{ active: route.name === 'preferences' }" @click="toggleMobileMenu">Preferences</router-link>
-          <router-link to="/urls" :class="{ active: route.name === 'sources' }" @click="toggleMobileMenu">Sources</router-link>
+          <router-link to="/settings" :class="{ active: route.name === 'settings' }" @click="toggleMobileMenu">Settings</router-link>
         </div>
       </div>
     </nav>
