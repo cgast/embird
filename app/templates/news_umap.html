@@ -126,8 +126,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     }
                 }
                 tooltip.querySelector('.card-text').textContent = hostname;
-                tooltip.querySelector('.cluster-info').textContent = d.cluster_id !== undefined && d.cluster_id !== null ?
-                    `Cluster ${d.cluster_id}` : 'Unclustered';
+                tooltip.querySelector('.cluster-info').textContent = d.cluster_name || 'Unclustered';
             })
             .on('mouseout', function() {
                 d3.select(this)
@@ -215,11 +214,19 @@ document.addEventListener('DOMContentLoaded', function() {
                 .attr('r', legendCircleRadius)
                 .attr('fill', d => colorScale(d));
 
+            // Build cluster name lookup
+            const clusterNameMap = {};
+            for (const d of data) {
+                if (d.cluster_id != null && d.cluster_name) {
+                    clusterNameMap[d.cluster_id] = d.cluster_name;
+                }
+            }
+
             legendItems.append('text')
                 .attr('x', legendTextOffset)
                 .attr('y', legendCircleRadius / 2)
                 .attr('fill', '#e0e0e0')
-                .text(d => `Cluster ${d}`);
+                .text(d => clusterNameMap[d] || `Cluster ${d}`);
         }
 
         // Add unclustered legend item
