@@ -354,6 +354,143 @@ async def get_news_clusters(db: AsyncSession = Depends(get_db)):
         logging.error(f"Clustering error: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
+@router.get("/news/stats")
+async def get_news_stats(db: AsyncSession = Depends(get_db)):
+    """Get system statistics for the dashboard: article counts, activity timelines, cluster info."""
+    try:
+        now = datetime.utcnow()
+
+        # Total articles
+        total_result = await db.execute(select(func.count(NewsItem.id)))
+        total_articles = total_result.scalar() or 0
+
+        # Articles in last 24h, 48h
+        h24 = now - timedelta(hours=24)
+        h48 = now - timedelta(hours=48)
+        r24 = await db.execute(select(func.count(NewsItem.id)).filter(NewsItem.created_at >= h24))
+        articles_24h = r24.scalar() or 0
+        r48 = await db.execute(select(func.count(NewsItem.id)).filter(NewsItem.created_at >= h48))
+        articles_48h = r48.scalar() or 0
+
+        # Unique sources
+        src_result = await db.execute(select(func.count(func.distinct(NewsItem.source_url))))
+        unique_sources = src_result.scalar() or 0
+
+        # Articles with hit_count > 1 (trending)
+        trending_result = await db.execute(
+            select(func.count(NewsItem.id)).filter(NewsItem.hit_count > 1)
+        )
+        trending_count = trending_result.scalar() or 0
+
+        # Average hit count
+        avg_hits_result = await db.execute(select(func.avg(NewsItem.hit_count)))
+        avg_hit_count = round(float(avg_hits_result.scalar() or 1), 2)
+
+        # Activity timeline: articles created per hour over last 48 hours
+        # Using date_trunc to group by hour
+        timeline_stmt = text("""
+            SELECT
+                date_trunc('hour', created_at) as hour,
+                count(*) as count
+            FROM news
+            WHERE created_at >= :since
+            GROUP BY date_trunc('hour', created_at)
+            ORDER BY hour ASC
+        """)
+        timeline_result = await db.execute(timeline_stmt, {"since": h48})
+        activity_timeline = [
+            {"hour": row.hour.isoformat(), "count": row.count}
+            for row in timeline_result
+        ]
+
+        # Story lifespan distribution: how long stories remain active (last_seen - first_seen)
+        lifespan_stmt = text("""
+            SELECT
+                CASE
+                    WHEN extract(epoch from (last_seen_at - first_seen_at)) / 3600 < 1 THEN '<1h'
+                    WHEN extract(epoch from (last_seen_at - first_seen_at)) / 3600 < 6 THEN '1-6h'
+                    WHEN extract(epoch from (last_seen_at - first_seen_at)) / 3600 < 12 THEN '6-12h'
+                    WHEN extract(epoch from (last_seen_at - first_seen_at)) / 3600 < 24 THEN '12-24h'
+                    WHEN extract(epoch from (last_seen_at - first_seen_at)) / 3600 < 48 THEN '1-2d'
+                    ELSE '2d+'
+                END as bucket,
+                count(*) as count
+            FROM news
+            WHERE created_at >= :since
+            GROUP BY bucket
+            ORDER BY min(extract(epoch from (last_seen_at - first_seen_at)))
+        """)
+        lifespan_result = await db.execute(lifespan_stmt, {"since": h48})
+        lifespan_distribution = [
+            {"bucket": row.bucket, "count": row.count}
+            for row in lifespan_result
+        ]
+
+        # Newest and oldest articles
+        newest_result = await db.execute(
+            select(NewsItem.created_at).order_by(NewsItem.created_at.desc()).limit(1)
+        )
+        newest_article = newest_result.scalar()
+
+        oldest_recent_result = await db.execute(
+            select(NewsItem.created_at).filter(NewsItem.created_at >= h48).order_by(NewsItem.created_at.asc()).limit(1)
+        )
+        oldest_recent = oldest_recent_result.scalar()
+
+        # Cluster info
+        cluster_result = await db.execute(
+            select(NewsClusters).order_by(NewsClusters.created_at.desc()).limit(1)
+        )
+        cluster_row = cluster_result.scalars().first()
+        cluster_info = None
+        if cluster_row:
+            cluster_data = cluster_row.clusters or {}
+            total_clustered = sum(
+                len(c.get('articles', [])) if isinstance(c, dict) else 0
+                for c in cluster_data.values()
+            )
+            cluster_info = {
+                "generated_at": cluster_row.created_at.isoformat() if cluster_row.created_at else None,
+                "num_clusters": len(cluster_data),
+                "total_articles_clustered": total_clustered,
+                "hours": cluster_row.hours,
+                "min_similarity": cluster_row.min_similarity
+            }
+
+        # Top sources by article count (last 48h)
+        top_sources_stmt = text("""
+            SELECT source_url, count(*) as count
+            FROM news
+            WHERE created_at >= :since
+            GROUP BY source_url
+            ORDER BY count DESC
+            LIMIT 10
+        """)
+        top_sources_result = await db.execute(top_sources_stmt, {"since": h48})
+        top_sources = [
+            {"source_url": row.source_url, "count": row.count}
+            for row in top_sources_result
+        ]
+
+        return {
+            "total_articles": total_articles,
+            "articles_24h": articles_24h,
+            "articles_48h": articles_48h,
+            "unique_sources": unique_sources,
+            "trending_count": trending_count,
+            "avg_hit_count": avg_hit_count,
+            "newest_article_at": newest_article.isoformat() if newest_article else None,
+            "oldest_recent_at": oldest_recent.isoformat() if oldest_recent else None,
+            "activity_timeline": activity_timeline,
+            "lifespan_distribution": lifespan_distribution,
+            "cluster_info": cluster_info,
+            "top_sources": top_sources
+        }
+
+    except Exception as e:
+        logging.error(f"Stats error: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 @router.get("/news/trending", response_model=List[NewsItemResponse])
 async def get_trending_news(
     db: AsyncSession = Depends(get_db),
