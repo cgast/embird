@@ -1,20 +1,17 @@
 <script setup>
-import { ref, onMounted, onUnmounted, computed, nextTick, defineAsyncComponent } from 'vue'
+import { ref, onMounted, onUnmounted, computed, nextTick } from 'vue'
 import * as d3 from 'd3'
 
 const stats = ref(null)
 const loading = ref(true)
 const error = ref(null)
 
-// UMAP lazy-loading state
-const umapSentinel = ref(null)
-const umapVisible = ref(false)
-const umapLoading = ref(false)
+// UMAP state
+const umapLoading = ref(true)
 const umapError = ref(null)
 const umapData = ref([])
 const svgContainer = ref(null)
 const tooltip = ref(null)
-let observer = null
 
 const fetchStats = async () => {
   try {
@@ -282,27 +279,12 @@ const handleResize = () => {
 
 onMounted(() => {
   fetchStats()
+  fetchUmapData()
   window.addEventListener('resize', handleResize)
-
-  // Set up IntersectionObserver for lazy-loading UMAP
-  if (umapSentinel.value) {
-    observer = new IntersectionObserver(
-      (entries) => {
-        if (entries[0].isIntersecting && !umapVisible.value) {
-          umapVisible.value = true
-          fetchUmapData()
-          observer.disconnect()
-        }
-      },
-      { rootMargin: '200px' }
-    )
-    observer.observe(umapSentinel.value)
-  }
 })
 
 onUnmounted(() => {
   window.removeEventListener('resize', handleResize)
-  if (observer) observer.disconnect()
 })
 </script>
 
@@ -455,37 +437,31 @@ onUnmounted(() => {
         <p v-else class="text-muted">No source data available.</p>
       </section>
 
-      <!-- UMAP Visualization (lazy loaded) -->
-      <section class="section" ref="umapSentinel">
+      <!-- UMAP Visualization -->
+      <section class="section">
         <h2 class="section-title">UMAP Visualization</h2>
         <p class="text-muted section-sub">2D projection of news articles and preference vectors</p>
 
-        <template v-if="umapVisible">
-          <div v-if="umapLoading" class="loading-container">
-            <div class="spinner"></div>
-            <p class="text-muted">Loading visualization...</p>
-          </div>
+        <div v-if="umapLoading" class="loading-container">
+          <div class="spinner"></div>
+          <p class="text-muted">Loading visualization...</p>
+        </div>
 
-          <div v-else-if="umapError" class="alert">
-            <strong>Error:</strong> {{ umapError }}
-          </div>
+        <div v-else-if="umapError" class="alert">
+          <strong>Error:</strong> {{ umapError }}
+        </div>
 
-          <div v-else class="umap-container">
-            <div class="umap-info">
-              <p>Colors represent clusters, transparency indicates article age. Click points to open articles.</p>
-              <p><strong>Data points:</strong> {{ umapData.length }}</p>
-            </div>
-            <div ref="svgContainer" class="svg-container"></div>
-            <div ref="tooltip" class="tooltip-box">
-              <div class="tooltip-title"></div>
-              <div class="tooltip-source"></div>
-              <div class="tooltip-cluster"></div>
-            </div>
+        <div v-else class="umap-container">
+          <div class="umap-info">
+            <p>Colors represent clusters, transparency indicates article age. Click points to open articles.</p>
+            <p><strong>Data points:</strong> {{ umapData.length }}</p>
           </div>
-        </template>
-
-        <div v-else class="umap-placeholder">
-          <p class="text-muted">Scroll down to load the UMAP visualization...</p>
+          <div ref="svgContainer" class="svg-container"></div>
+          <div ref="tooltip" class="tooltip-box">
+            <div class="tooltip-title"></div>
+            <div class="tooltip-source"></div>
+            <div class="tooltip-cluster"></div>
+          </div>
         </div>
       </section>
     </div>
@@ -764,11 +740,6 @@ onUnmounted(() => {
 .svg-container :deep(svg) {
   display: block;
   width: 100%;
-}
-
-.umap-placeholder {
-  text-align: center;
-  padding: 2rem 0;
 }
 
 .tooltip-box {
