@@ -5,7 +5,7 @@
 {% block content %}
 <div class="row mb-4">
     <div class="col">
-        <h1>{{ news_item.title }}</h1>
+        <h1><a href="{{ news_item.url }}" target="_blank" rel="noopener noreferrer" class="text-decoration-none text-dark">{{ news_item.title }}</a></h1>
     </div>
 </div>
 
@@ -14,51 +14,65 @@
         <div class="card mb-4">
             <div class="card-body">
                 <div class="d-flex justify-content-between mb-3">
-                    <span class="badge bg-primary">{{ news_item.source_url }}</span>
+                    <a href="/news?source_url={{ news_item.source_url }}" class="badge bg-primary text-decoration-none">{{ news_item.source_url }}</a>
                     <span class="badge bg-secondary">Hits: {{ news_item.hit_count }}</span>
                 </div>
-                
+
                 <h5 class="card-title">Summary</h5>
                 <p class="card-text">{{ news_item.summary }}</p>
-                
-                <div class="alert alert-light">
-                    <p class="mb-0"><strong>First seen:</strong> {{ news_item.first_seen_at.strftime('%Y-%m-%d %H:%M') }}</p>
-                    <p class="mb-0"><strong>Last seen:</strong> {{ news_item.last_seen_at.strftime('%Y-%m-%d %H:%M') }}</p>
-                </div>
-                
-                <div class="d-grid gap-2">
-                    <a href="{{ news_item.url }}" class="btn btn-primary" target="_blank" rel="noopener noreferrer">
-                        Read Full Article
-                    </a>
-                    <a href="/news?source_url={{ news_item.source_url }}" class="btn btn-outline-secondary">
-                        More from this Source
-                    </a>
+
+                <div class="d-flex align-items-center flex-wrap gap-2">
+                    <small class="text-muted"><strong>First seen:</strong> {{ news_item.first_seen_at.strftime('%Y-%m-%d %H:%M') }}</small>
+                    <small class="text-muted">&middot;</small>
+                    <small class="text-muted"><strong>Last seen:</strong> {{ news_item.last_seen_at.strftime('%Y-%m-%d %H:%M') }}</small>
+                    <span class="badge bg-info text-dark">{{ lifetime_hours }}h online</span>
+                    <a href="{{ news_item.url }}" class="btn btn-primary btn-sm ms-auto" target="_blank" rel="noopener noreferrer">Read Full Article</a>
                 </div>
             </div>
         </div>
     </div>
-    
+
     <div class="col-md-4">
-        <div class="card">
+        <div class="card mb-3">
             <div class="card-header bg-light">
-                <h5 class="card-title mb-0">Related News</h5>
+                <h5 class="card-title mb-0">More from {{ news_item.source_url }}</h5>
             </div>
             <div class="card-body">
                 {% if related_items %}
-                <div class="list-group">
+                <div class="list-group list-group-flush">
                     {% for item in related_items %}
-                    <a href="/news/{{ item.id }}" class="list-group-item list-group-item-action">
-                        <div class="d-flex w-100 justify-content-between">
-                            <h6 class="mb-1">{{ item.title }}</h6>
-                        </div>
+                    <a href="/news/{{ item.id }}" class="list-group-item list-group-item-action px-0">
+                        <h6 class="mb-1">{{ item.title }}</h6>
                         <small class="text-muted">
-                            {{ item.first_seen_at.strftime('%Y-%m-%d') }} · {{ item.hit_count }} hits
+                            {{ item.first_seen_at.strftime('%Y-%m-%d') }} &middot; {{ item.hit_count }} hits
                         </small>
                     </a>
                     {% endfor %}
                 </div>
                 {% else %}
-                <p class="text-muted">No related news available.</p>
+                <p class="text-muted mb-0">No other articles from this source.</p>
+                {% endif %}
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header bg-light">
+                <h5 class="card-title mb-0">Related from All Sources</h5>
+            </div>
+            <div class="card-body">
+                {% if similar_items %}
+                <div class="list-group list-group-flush">
+                    {% for item in similar_items %}
+                    <a href="/news/{{ item.id }}" class="list-group-item list-group-item-action px-0">
+                        <h6 class="mb-1">{{ item.title }}</h6>
+                        <small class="text-muted">
+                            {{ item.source_url }} &middot; {{ item.first_seen_at.strftime('%Y-%m-%d') }}
+                        </small>
+                    </a>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <p class="text-muted mb-0">No similar articles found.</p>
                 {% endif %}
             </div>
         </div>
