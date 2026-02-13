@@ -541,6 +541,64 @@ async def get_news_item(news_id: int, db: AsyncSession = Depends(get_db)):
 
     return news_item
 
+@router.get("/news/{news_id}/similar", response_model=List[NewsItemSimilarity])
+async def get_similar_news(
+    news_id: int,
+    db: AsyncSession = Depends(get_db),
+    limit: int = Query(5, ge=1, le=20)
+):
+    """Get similar news items using vector proximity."""
+    result = await db.execute(select(NewsItem).filter(NewsItem.id == news_id))
+    news_item = result.scalars().first()
+
+    if not news_item:
+        raise HTTPException(status_code=404, detail="News item not found")
+
+    if news_item.embedding is None:
+        return []
+
+    try:
+        faiss_service = get_faiss_service()
+        query_vector = np.array(news_item.embedding, dtype=np.float32)
+        similar_results = await faiss_service.search_similar(
+            db, query_vector, k=limit + 1, min_similarity=0.5
+        )
+
+        # Filter out the current article
+        similar_ids_scores = [(sid, score) for sid, score in similar_results if sid != news_id][:limit]
+        if not similar_ids_scores:
+            return []
+
+        item_ids = [sid for sid, _ in similar_ids_scores]
+        stmt = select(NewsItem).filter(NewsItem.id.in_(item_ids))
+        result = await db.execute(stmt)
+        db_items = {item.id: item for item in result.scalars().all()}
+
+        news_items = []
+        for item_id, similarity in similar_ids_scores:
+            if item_id in db_items:
+                db_item = db_items[item_id]
+                item_data = {
+                    'id': db_item.id,
+                    'title': db_item.title,
+                    'summary': db_item.summary,
+                    'url': db_item.url,
+                    'source_url': db_item.source_url,
+                    'first_seen_at': db_item.first_seen_at,
+                    'last_seen_at': db_item.last_seen_at,
+                    'hit_count': db_item.hit_count,
+                    'created_at': db_item.created_at,
+                    'updated_at': db_item.updated_at,
+                    'similarity': similarity
+                }
+                news_items.append(NewsItemSimilarity.model_validate(item_data))
+
+        return news_items
+
+    except Exception as e:
+        logger.error(f"Error fetching similar items for news {news_id}: {str(e)}")
+        return []
+
 # ---- Preference Vector Endpoints ----
 
 @router.get("/preference-vectors", response_model=List[PreferenceVectorResponse])

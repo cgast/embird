@@ -265,10 +265,10 @@ async def view_news_item(
     """Render a single news item page."""
     result = await db.execute(select(NewsItem).filter(NewsItem.id == news_id))
     news_item = result.scalars().first()
-
+    
     if not news_item:
         raise HTTPException(status_code=404, detail="News item not found")
-
+    
     # Get related news items (from same source)
     related_query = select(NewsItem).filter(
         NewsItem.source_url == news_item.source_url,
@@ -276,42 +276,16 @@ async def view_news_item(
     ).order_by(
         NewsItem.last_seen_at.desc()
     ).limit(5)
-
+    
     related_result = await db.execute(related_query)
     related_items = related_result.scalars().all()
-
-    # Get similar items from all sources using vector proximity
-    similar_items = []
-    if news_item.embedding is not None:
-        try:
-            faiss_service = get_faiss_service()
-            query_vector = np.array(news_item.embedding, dtype=np.float32)
-            similar_results = await faiss_service.search_similar(
-                db, query_vector, k=10, min_similarity=0.5
-            )
-            # Filter out the current article, keep top 5
-            similar_ids = [sid for sid, score in similar_results if sid != news_item.id][:5]
-            if similar_ids:
-                similar_query = select(NewsItem).filter(NewsItem.id.in_(similar_ids))
-                similar_result = await db.execute(similar_query)
-                similar_items_map = {item.id: item for item in similar_result.scalars().all()}
-                # Preserve FAISS ordering (by similarity)
-                similar_items = [similar_items_map[sid] for sid in similar_ids if sid in similar_items_map]
-        except Exception as e:
-            logger.error(f"Error fetching similar items for news {news_id}: {str(e)}")
-
-    # Calculate lifetime (hours between first seen and last seen)
-    lifetime_seconds = (news_item.last_seen_at - news_item.first_seen_at).total_seconds()
-    lifetime_hours = round(lifetime_seconds / 3600, 1)
-
+    
     return request.state.templates.TemplateResponse(
         "news_detail.html",
         {
             "request": request,
             "news_item": news_item,
             "related_items": related_items,
-            "similar_items": similar_items,
-            "lifetime_hours": lifetime_hours,
             "enable_url_management": settings.ENABLE_URL_MANAGEMENT,
             "enable_preference_management": settings.ENABLE_PREFERENCE_MANAGEMENT
         }
