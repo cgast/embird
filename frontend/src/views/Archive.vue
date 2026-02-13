@@ -108,10 +108,10 @@ const clearSearch = () => {
 const filterBySource = (source) => {
   if (sourceFilter.value === source) {
     sourceFilter.value = ''
-    router.push({ name: 'archive' })
+    router.push({ name: 'newnews' })
   } else {
     sourceFilter.value = source
-    router.push({ name: 'archive', query: { source_url: source } })
+    router.push({ name: 'newnews', query: { source_url: source } })
   }
 }
 

@@ -50,9 +50,10 @@ const toggleMobileMenu = () => {
 
         <!-- Desktop menu -->
         <div class="navbar-menu desktop-menu">
-          <router-link to="/" :class="{ active: route.name === 'home' }">Home</router-link>
-          <router-link to="/archive" :class="{ active: route.name === 'archive' }">Archive</router-link>
-          <router-link to="/dashboard" :class="{ active: route.name === 'dashboard' }">Dashboard</router-link>
+          <router-link to="/" :class="{ active: route.name === 'topnews' }">TopNews</router-link>
+          <router-link to="/newnews" :class="{ active: route.name === 'newnews' }">NewNews</router-link>
+          <router-link to="/wall" :class="{ active: route.name === 'wall' }">WallOfNews</router-link>
+          <router-link to="/system" :class="{ active: route.name === 'system' }">System</router-link>
           <router-link to="/settings" :class="{ active: route.name === 'settings' }">Settings</router-link>
 
           <button @click="toggleTheme" class="theme-toggle">
@@ -75,9 +76,10 @@ const toggleMobileMenu = () => {
 
         <!-- Mobile menu -->
         <div v-if="mobileMenuOpen" class="navbar-menu mobile-menu">
-          <router-link to="/" :class="{ active: route.name === 'home' }" @click="toggleMobileMenu">Home</router-link>
-          <router-link to="/archive" :class="{ active: route.name === 'archive' }" @click="toggleMobileMenu">Archive</router-link>
-          <router-link to="/dashboard" :class="{ active: route.name === 'dashboard' }" @click="toggleMobileMenu">Dashboard</router-link>
+          <router-link to="/" :class="{ active: route.name === 'topnews' }" @click="toggleMobileMenu">TopNews</router-link>
+          <router-link to="/newnews" :class="{ active: route.name === 'newnews' }" @click="toggleMobileMenu">NewNews</router-link>
+          <router-link to="/wall" :class="{ active: route.name === 'wall' }" @click="toggleMobileMenu">WallOfNews</router-link>
+          <router-link to="/system" :class="{ active: route.name === 'system' }" @click="toggleMobileMenu">System</router-link>
           <router-link to="/settings" :class="{ active: route.name === 'settings' }" @click="toggleMobileMenu">Settings</router-link>
         </div>
       </div>
