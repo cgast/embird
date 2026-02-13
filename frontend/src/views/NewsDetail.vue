@@ -113,7 +113,7 @@ watch(() => route.params.id, () => {
       <article class="article">
         <header class="article-header">
           <div class="article-source">
-            <router-link :to="{ name: 'archive', query: { source_url: newsItem.source_url } }" class="source-domain">{{ sourceDomain }}</router-link>
+            <router-link :to="{ name: 'newnews', query: { source_url: newsItem.source_url } }" class="source-domain">{{ sourceDomain }}</router-link>
             <span class="separator">&middot;</span>
             <span class="hit-count">{{ newsItem.hit_count }} hit{{ newsItem.hit_count !== 1 ? 's' : '' }}</span>
           </div>
