@@ -306,13 +306,13 @@ onMounted(() => {
 }
 
 .source-type-badge.rss {
-  background-color: rgba(99, 102, 241, 0.1);
-  color: var(--primary-color);
+  background-color: rgba(0, 0, 0, 0.08);
+  color: var(--text-color);
 }
 
 .source-type-badge.homepage {
-  background-color: rgba(16, 185, 129, 0.1);
-  color: #10b981;
+  background-color: rgba(0, 0, 0, 0.05);
+  color: var(--text-muted);
 }
 
 .source-url {
