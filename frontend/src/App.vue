@@ -31,8 +31,8 @@ const toggleMobileMenu = () => {
     <nav class="navbar">
       <div class="container navbar-container">
         <router-link to="/" class="navbar-brand">
-          <img src="/EmBird-logo.png" alt="EmBird" class="logo" />
-          <span>EmBird</span>
+          <img src="/embird-bird.svg" alt="EmBird" class="logo" />
+          <img src="/embird-text.svg" alt="embird" class="logo-text" />
         </router-link>
 
         <!-- Mobile menu button -->
@@ -115,13 +115,20 @@ const toggleMobileMenu = () => {
   gap: 0.5rem;
   font-size: 1.25rem;
   font-weight: 700;
-  color: var(--primary-color);
+  color: var(--text-color);
   text-decoration: none;
 }
 
 .logo {
-  height: 32px;
+  height: 28px;
   width: auto;
+  color: var(--text-color);
+}
+
+.logo-text {
+  height: 20px;
+  width: auto;
+  color: var(--text-color);
 }
 
 .mobile-menu-btn {
@@ -188,8 +195,9 @@ const toggleMobileMenu = () => {
 }
 
 .navbar-menu a.active {
-  color: var(--primary-color);
+  color: var(--text-color);
   background-color: var(--bg-color);
+  font-weight: 600;
 }
 
 .theme-toggle {

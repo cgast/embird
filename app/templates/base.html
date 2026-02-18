@@ -7,8 +7,8 @@
     <link href="https://cdn.jsdelivr.net/npm/geist@1.3.1/dist/geist-sans/style.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="/static/css/style.css" rel="stylesheet">
-    <link rel="icon" type="image/png" href="/static/img/EmBird-logo.png">
-    <link rel="apple-touch-icon" href="/static/img/EmBird-logo.png">
+    <link rel="icon" type="image/svg+xml" href="/static/img/embird-bird.svg">
+    <link rel="apple-touch-icon" href="/static/img/embird-bird.svg">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black">
     <link rel="manifest" href="/static/manifest.json">
@@ -20,110 +20,110 @@
             --bs-font-sans-serif: "Geist", "Helvetica Neue", Helvetica, Arial, sans-serif;
         }
 
-        /* Light Theme (Default) */
+        /* Light Theme (Default) - Monochrome */
         :root[data-theme="light"], :root:not([data-theme]) {
-            --bs-body-bg: #ffffff;
-            --bs-body-color: #333333;
-            --bs-secondary-color: rgba(108, 117, 125, 0.75);
+            --bs-body-bg: #f5f5f5;
+            --bs-body-color: #111111;
+            --bs-secondary-color: rgba(100, 100, 100, 0.75);
 
-            /* Primary colors - muted blue */
-            --bs-primary: #4a7ba7;
-            --bs-primary-rgb: 74, 123, 167;
-            --bs-primary-darken: #3a6585;
+            /* Primary colors - monochrome */
+            --bs-primary: #222222;
+            --bs-primary-rgb: 34, 34, 34;
+            --bs-primary-darken: #000000;
 
             /* Secondary colors */
-            --bs-secondary: #6c757d;
-            --bs-secondary-rgb: 108, 117, 125;
+            --bs-secondary: #666666;
+            --bs-secondary-rgb: 102, 102, 102;
 
-            /* Success, danger, warning, info - muted */
-            --bs-success: #5a8052;
-            --bs-danger: #a05252;
-            --bs-warning: #b8981a;
-            --bs-info: #5a7d9e;
+            /* Status colors - monochrome grays */
+            --bs-success: #444444;
+            --bs-danger: #333333;
+            --bs-warning: #555555;
+            --bs-info: #777777;
 
             /* Component colors */
-            --bs-light: #f8f9fa;
-            --bs-dark: #343a40;
-            --bs-border-color: #dee2e6;
+            --bs-light: #f0f0f0;
+            --bs-dark: #222222;
+            --bs-border-color: #d0d0d0;
             --bs-card-bg: #ffffff;
             --bs-modal-bg: #ffffff;
             --bs-dropdown-bg: #ffffff;
-            --bs-dropdown-link-hover-bg: #f8f9fa;
-            --bs-dropdown-link-active-bg: #4a7ba7;
+            --bs-dropdown-link-hover-bg: #f0f0f0;
+            --bs-dropdown-link-active-bg: #222222;
 
             /* Input fields */
             --bs-input-bg: #ffffff;
-            --bs-input-color: #333333;
-            --bs-input-border-color: #ced4da;
-            --bs-input-focus-border-color: #4a7ba7;
-            --bs-input-focus-box-shadow: 0 0 0 0.25rem rgba(74, 123, 167, 0.25);
+            --bs-input-color: #111111;
+            --bs-input-border-color: #cccccc;
+            --bs-input-focus-border-color: #222222;
+            --bs-input-focus-box-shadow: 0 0 0 0.25rem rgba(0, 0, 0, 0.15);
 
             /* Table colors */
             --bs-table-bg: #ffffff;
-            --bs-table-striped-bg: #f8f9fa;
-            --bs-table-hover-bg: #f1f3f5;
-            --bs-table-border-color: #dee2e6;
+            --bs-table-striped-bg: #f5f5f5;
+            --bs-table-hover-bg: #eeeeee;
+            --bs-table-border-color: #d0d0d0;
 
             /* Navbar */
-            --navbar-bg: #343a40;
+            --navbar-bg: #1a1a1a;
             --navbar-color: #ffffff;
 
             /* Links */
-            --link-color: #4a7ba7;
-            --link-hover-color: #3a6585;
+            --link-color: #222222;
+            --link-hover-color: #000000;
         }
 
-        /* Dark Theme */
+        /* Dark Theme - Monochrome */
         :root[data-theme="dark"] {
-            --bs-body-bg: #1a1a1a;
-            --bs-body-color: #e0e0e0;
+            --bs-body-bg: #111111;
+            --bs-body-color: #f0f0f0;
             --bs-secondary-color: rgba(160, 160, 160, 0.75);
 
-            /* Primary colors - muted blue */
-            --bs-primary: #6b9bc3;
-            --bs-primary-rgb: 107, 155, 195;
-            --bs-primary-darken: #5a8aad;
+            /* Primary colors - monochrome */
+            --bs-primary: #e0e0e0;
+            --bs-primary-rgb: 224, 224, 224;
+            --bs-primary-darken: #ffffff;
 
             /* Secondary colors */
-            --bs-secondary: #a0a0a0;
-            --bs-secondary-rgb: 160, 160, 160;
+            --bs-secondary: #999999;
+            --bs-secondary-rgb: 153, 153, 153;
 
-            /* Success, danger, warning, info - muted */
-            --bs-success: #6a9062;
-            --bs-danger: #b06262;
-            --bs-warning: #c8a82a;
-            --bs-info: #7a9dbe;
+            /* Status colors - monochrome grays */
+            --bs-success: #aaaaaa;
+            --bs-danger: #cccccc;
+            --bs-warning: #bbbbbb;
+            --bs-info: #999999;
 
             /* Component colors */
-            --bs-light: #2d2d2d;
-            --bs-dark: #121212;
-            --bs-border-color: #3a3a3a;
-            --bs-card-bg: #242424;
-            --bs-modal-bg: #242424;
-            --bs-dropdown-bg: #242424;
-            --bs-dropdown-link-hover-bg: #333333;
-            --bs-dropdown-link-active-bg: #6b9bc3;
+            --bs-light: #1e1e1e;
+            --bs-dark: #0a0a0a;
+            --bs-border-color: #333333;
+            --bs-card-bg: #1e1e1e;
+            --bs-modal-bg: #1e1e1e;
+            --bs-dropdown-bg: #1e1e1e;
+            --bs-dropdown-link-hover-bg: #2a2a2a;
+            --bs-dropdown-link-active-bg: #e0e0e0;
 
             /* Input fields */
-            --bs-input-bg: #2d2d2d;
-            --bs-input-color: #e0e0e0;
+            --bs-input-bg: #1e1e1e;
+            --bs-input-color: #f0f0f0;
             --bs-input-border-color: #444444;
-            --bs-input-focus-border-color: #6b9bc3;
-            --bs-input-focus-box-shadow: 0 0 0 0.25rem rgba(107, 155, 195, 0.25);
+            --bs-input-focus-border-color: #e0e0e0;
+            --bs-input-focus-box-shadow: 0 0 0 0.25rem rgba(255, 255, 255, 0.15);
 
             /* Table colors */
-            --bs-table-bg: #242424;
-            --bs-table-striped-bg: #2a2a2a;
-            --bs-table-hover-bg: #303030;
-            --bs-table-border-color: #3a3a3a;
+            --bs-table-bg: #1e1e1e;
+            --bs-table-striped-bg: #222222;
+            --bs-table-hover-bg: #2a2a2a;
+            --bs-table-border-color: #333333;
 
             /* Navbar */
-            --navbar-bg: #121212;
-            --navbar-color: #e0e0e0;
+            --navbar-bg: #0a0a0a;
+            --navbar-color: #f0f0f0;
 
             /* Links */
-            --link-color: #6b9bc3;
-            --link-hover-color: #5a8aad;
+            --link-color: #e0e0e0;
+            --link-hover-color: #ffffff;
         }
 
         body {
@@ -202,7 +202,7 @@
         .navbar-brand img {
             height: 24px;
             width: auto;
-            margin-right: 8px;
+            filter: brightness(0) invert(1);
         }
 
         #theme-toggle {
@@ -287,7 +287,7 @@
 <body>
     <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
         <div class="container">
-            <a class="navbar-brand" href="/"><img src="/static/img/EmBird-logo.png" alt="EmBird"></a>
+            <a class="navbar-brand d-flex align-items-center gap-2" href="/"><img src="/static/img/embird-bird.svg" alt="EmBird" style="height:24px;width:auto;"><img src="/static/img/embird-text.svg" alt="embird" style="height:16px;width:auto;"></a>
             <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
                 <span class="navbar-toggler-icon"></span>
             </button>

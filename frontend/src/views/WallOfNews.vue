@@ -358,11 +358,11 @@ onMounted(() => {
 }
 
 .heat-hot-dot {
-  background: #e74c3c;
+  background: #111111;
 }
 
 .heat-warm-dot {
-  background: #f39c12;
+  background: #888888;
 }
 
 .wall-section {
@@ -449,7 +449,7 @@ onMounted(() => {
 }
 
 .headline-item.heat-hot {
-  border-left: 3px solid #e74c3c;
+  border-left: 3px solid #111111;
   padding-left: calc(0.75rem - 3px);
 }
 
@@ -459,7 +459,7 @@ onMounted(() => {
 }
 
 .headline-item.heat-warm {
-  border-left: 3px solid #f39c12;
+  border-left: 3px solid #888888;
   padding-left: calc(0.75rem - 3px);
 }
 

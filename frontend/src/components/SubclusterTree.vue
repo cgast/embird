@@ -123,13 +123,13 @@ const hasChildren = (sub) => sub.subclusters && sub.subclusters.length > 1
 }
 
 .subcluster-node {
-  border-left: 3px solid var(--primary-color, #4f46e5);
+  border-left: 3px solid var(--primary-color, #222222);
   padding-left: 0.75rem;
   border-radius: 0 4px 4px 0;
 }
 
 .subcluster-node.has-children {
-  border-left-color: var(--primary-color, #4f46e5);
+  border-left-color: var(--primary-color, #222222);
 }
 
 .subcluster-header {
@@ -140,11 +140,11 @@ const hasChildren = (sub) => sub.subclusters && sub.subclusters.length > 1
   cursor: pointer;
   border-radius: 4px;
   transition: background-color 0.15s ease;
-  background: rgba(79, 70, 229, 0.04);
+  background: rgba(0, 0, 0, 0.03);
 }
 
 .subcluster-header:hover {
-  background: rgba(79, 70, 229, 0.08);
+  background: rgba(0, 0, 0, 0.06);
 }
 
 .subcluster-info {
@@ -154,22 +154,22 @@ const hasChildren = (sub) => sub.subclusters && sub.subclusters.length > 1
 
 .subcluster-name {
   font-weight: 600;
-  color: var(--primary-color, #4f46e5);
+  color: var(--text-color, #222222);
   font-size: 0.9375rem;
   display: block;
   margin-bottom: 0.25rem;
 }
 
 .subcluster-name.depth-1 {
-  color: #7c3aed;
+  color: var(--text-color);
 }
 
 .subcluster-name.depth-2 {
-  color: #2563eb;
+  color: var(--secondary-color, #666666);
 }
 
 .subcluster-name.depth-3 {
-  color: #0891b2;
+  color: var(--text-muted, #888888);
 }
 
 .subcluster-meta {
@@ -179,13 +179,13 @@ const hasChildren = (sub) => sub.subclusters && sub.subclusters.length > 1
 }
 
 .badge-info {
-  background: rgba(79, 70, 229, 0.12);
-  color: var(--primary-color, #4f46e5);
+  background: rgba(0, 0, 0, 0.08);
+  color: var(--text-color, #222222);
 }
 
 .badge-subtle {
-  background: rgba(0, 0, 0, 0.06);
-  color: var(--text-muted, #6b7280);
+  background: rgba(0, 0, 0, 0.05);
+  color: var(--text-muted, #888888);
 }
 
 .expand-icon {
