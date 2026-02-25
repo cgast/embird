@@ -8,13 +8,13 @@
   "theme_color": "#1a1a1a",
   "icons": [
     {
-      "src": "/static/img/EmBird-logo.png",
+      "src": "/static/img/embird-logo-192x192.png",
       "sizes": "192x192",
       "type": "image/png",
       "purpose": "any maskable"
     },
     {
-      "src": "/static/img/EmBird-logo.png",
+      "src": "/static/img/embird-logo-512x512.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any maskable"

@@ -1,5 +1,5 @@
 <center>
-  <img src="app/static/img/EmBird-logo.png" alt="EmBird logo" width="252" height="252" style="display: block; margin: 20px 0;">
+  <img src="app/static/img/embird-logo-bird-v2.png" alt="EmBird logo" width="252" height="252" style="display: block; margin: 20px 0;">
 </center>
 
 # EmBird

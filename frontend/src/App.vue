@@ -31,7 +31,7 @@ const toggleMobileMenu = () => {
     <nav class="navbar">
       <div class="container navbar-container">
         <router-link to="/" class="navbar-brand">
-          <img src="/embird-bird.svg" alt="EmBird" class="logo" />
+          <img src="/embird-logo-bird-v2.png" alt="EmBird" class="logo" />
           <img src="/embird-text.svg" alt="embird" class="logo-text" />
         </router-link>
 

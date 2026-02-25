@@ -26,7 +26,7 @@ Modern, responsive Vue.js frontend for the EmBird news aggregation system.
 ```
 frontend/
 ├── public/                # Static assets
-│   └── EmBird-logo.png   # Application logo
+│   └── embird-logo-bird-v2.png  # Application logo
 ├── src/
 │   ├── components/        # Reusable Vue components
 │   │   └── NewsCard.vue  # News article card component
