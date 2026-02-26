@@ -125,6 +125,29 @@ const getNewestArticle = (articles) => {
   }, articles[0])
 }
 
+const getAllTags = (topic) => {
+  const tags = []
+  const seen = new Set()
+  const addTags = (nameStr) => {
+    if (!nameStr) return
+    for (const t of nameStr.split(',')) {
+      const trimmed = t.trim().toLowerCase()
+      if (trimmed && !seen.has(trimmed)) {
+        seen.add(trimmed)
+        tags.push(trimmed)
+      }
+    }
+  }
+  addTags(topic.parentName)
+  addTags(topic.name)
+  return tags
+}
+
+const sortedArticles = (articles) => {
+  if (!articles || articles.length === 0) return []
+  return [...articles].sort((a, b) => new Date(b.first_seen_at) - new Date(a.first_seen_at))
+}
+
 const toggleCluster = (topicId) => {
   if (expandedClusters.value.has(topicId)) {
     expandedClusters.value.delete(topicId)
@@ -182,7 +205,8 @@ onMounted(() => {
           <div class="topic-rank">#{{ rank + 1 }}</div>
           <div class="topic-main">
             <div class="topic-header">
-              <h2 class="topic-name">{{ topic.name }}</h2>
+              <h2 v-if="getNewestArticle(topic.articles)" class="topic-name">{{ getNewestArticle(topic.articles).title }}</h2>
+              <h2 v-else class="topic-name">{{ topic.name }}</h2>
               <div class="expand-icon" :class="{ 'expanded': isExpanded(topic.id) }">
                 <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                   <polyline points="6 9 12 15 18 9"></polyline>
@@ -190,22 +214,19 @@ onMounted(() => {
               </div>
             </div>
             <div class="topic-tags">
-              <span v-if="topic.parentName" class="tag tag-parent">{{ topic.parentName }}</span>
+              <span v-for="tag in getAllTags(topic)" :key="tag" class="tag tag-keyword">{{ tag }}</span>
               <span class="tag tag-count">{{ topic.articles.length }} article{{ topic.articles.length !== 1 ? 's' : '' }}</span>
               <span class="tag tag-score">score {{ formatScore(topic.score) }}</span>
               <span v-if="getNewestArticle(topic.articles)" class="topic-time text-muted">
                 {{ formatRelativeTime(getNewestArticle(topic.articles).last_seen_at) }}
               </span>
             </div>
-            <div v-if="getNewestArticle(topic.articles)" class="topic-latest">
-              {{ getNewestArticle(topic.articles).title }}
-            </div>
           </div>
         </div>
 
         <div v-if="isExpanded(topic.id)" class="topic-articles">
           <div
-            v-for="item in topic.articles"
+            v-for="item in sortedArticles(topic.articles)"
             :key="item.id"
             class="article-row"
             @click="goToArticle(item.id, $event)"
@@ -333,8 +354,8 @@ onMounted(() => {
   letter-spacing: 0.3px;
 }
 
-.tag-parent {
-  background: rgba(79, 70, 229, 0.1);
+.tag-keyword {
+  background: rgba(79, 70, 229, 0.08);
   color: var(--primary-color);
 }
 
@@ -354,16 +375,6 @@ onMounted(() => {
 
 .topic-time {
   font-size: 0.8125rem;
-}
-
-.topic-latest {
-  font-size: 0.9375rem;
-  line-height: 1.4;
-  color: var(--text-muted);
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
 }
 
 .topic-articles {
