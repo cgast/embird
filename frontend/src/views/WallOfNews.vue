@@ -402,10 +402,8 @@ onMounted(() => {
 }
 
 .wall-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-  gap: 0.75rem;
-  align-items: start;
+  columns: 280px;
+  column-gap: 0.75rem;
 }
 
 .wall-column {
@@ -413,6 +411,8 @@ onMounted(() => {
   border: 1px solid var(--border-color);
   border-radius: 6px;
   overflow: hidden;
+  break-inside: avoid;
+  margin-bottom: 0.75rem;
 }
 
 .column-header {
@@ -533,7 +533,7 @@ onMounted(() => {
 
 @media (min-width: 1400px) {
   .wall-grid {
-    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    columns: 300px;
   }
 }
 
@@ -547,7 +547,7 @@ onMounted(() => {
   }
 
   .wall-grid {
-    grid-template-columns: 1fr;
+    columns: 1;
   }
 
   .headline-item {
