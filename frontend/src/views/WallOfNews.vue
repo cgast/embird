@@ -206,6 +206,12 @@ const formatScore = (score) => {
   return score.toFixed(1)
 }
 
+const MAX_VISIBLE = 5
+
+const goToCluster = (sectionId) => {
+  router.push(`/cluster/${encodeURIComponent(sectionId)}`)
+}
+
 onMounted(() => {
   fetchData()
 })
@@ -250,7 +256,7 @@ onMounted(() => {
             </div>
             <ul class="headline-list">
               <li
-                v-for="article in section.articles"
+                v-for="article in section.articles.slice(0, MAX_VISIBLE)"
                 :key="article.id"
                 class="headline-item"
                 :class="getHeatClass(article.id)"
@@ -261,6 +267,13 @@ onMounted(() => {
                 <span class="headline-source">{{ sourceDomain(article.source_url) }}</span>
               </li>
             </ul>
+            <div
+              v-if="section.articles.length > MAX_VISIBLE"
+              class="more-link"
+              @click="goToCluster(section.id)"
+            >
+              {{ section.articles.length - MAX_VISIBLE }} more&hellip;
+            </div>
           </div>
         </div>
       </div>
@@ -280,7 +293,7 @@ onMounted(() => {
             </div>
             <ul class="headline-list">
               <li
-                v-for="article in section.articles"
+                v-for="article in section.articles.slice(0, MAX_VISIBLE)"
                 :key="article.id"
                 class="headline-item"
                 :class="getHeatClass(article.id)"
@@ -290,6 +303,13 @@ onMounted(() => {
                 <span class="headline-title" @click.middle.prevent="openExternal(article.url, $event)">{{ article.title }}</span>
               </li>
             </ul>
+            <div
+              v-if="section.articles.length > MAX_VISIBLE"
+              class="more-link"
+              @click="goToCluster(section.name)"
+            >
+              {{ section.articles.length - MAX_VISIBLE }} more&hellip;
+            </div>
           </div>
         </div>
       </div>
@@ -486,6 +506,23 @@ onMounted(() => {
   color: var(--text-muted);
   flex-shrink: 0;
   opacity: 0.7;
+}
+
+.more-link {
+  padding: 0.4rem 0.75rem;
+  font-size: 0.8125rem;
+  color: var(--primary-color);
+  cursor: pointer;
+  text-align: center;
+  background: var(--bg-color);
+  border-top: 1px solid var(--border-color);
+  font-weight: 600;
+  transition: background-color 0.15s ease;
+}
+
+.more-link:hover {
+  background: var(--surface-color);
+  text-decoration: underline;
 }
 
 .loading-container,
