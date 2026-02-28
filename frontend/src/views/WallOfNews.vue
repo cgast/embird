@@ -410,8 +410,8 @@ onMounted(() => {
   background: var(--surface-color);
   border: 1px solid var(--border-color);
   border-radius: 6px;
-  overflow: hidden;
-  break-inside: avoid;
+  display: inline-block;
+  width: 100%;
   margin-bottom: 0.75rem;
 }
 
