@@ -1,5 +1,8 @@
 <script setup>
 import { ref, onMounted } from 'vue'
+import { useTopicApi } from '../composables/useTopicApi'
+
+const { apiUrl } = useTopicApi()
 
 const vectors = ref([])
 const loading = ref(true)
@@ -18,7 +21,7 @@ const fetchVectors = async () => {
     error.value = null
 
     // Note: This endpoint would need to be added to the API
-    const response = await fetch('/api/preference-vectors')
+    const response = await fetch(apiUrl('/preference-vectors'))
     if (!response.ok) {
       throw new Error('Failed to fetch preference vectors')
     }
@@ -40,7 +43,7 @@ const createVector = async () => {
   }
 
   try {
-    const response = await fetch('/api/preference-vectors', {
+    const response = await fetch(apiUrl('/preference-vectors'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(newVector.value)
@@ -64,7 +67,7 @@ const deleteVector = async (id) => {
   if (!confirm('Are you sure you want to delete this vector?')) return
 
   try {
-    const response = await fetch(`/api/preference-vectors/${id}`, {
+    const response = await fetch(apiUrl(`/preference-vectors/${id}`), {
       method: 'DELETE'
     })
 
@@ -87,7 +90,7 @@ const cancelEdit = () => {
 
 const saveEdit = async (vector) => {
   try {
-    const response = await fetch(`/api/preference-vectors/${vector.id}`, {
+    const response = await fetch(apiUrl(`/preference-vectors/${vector.id}`), {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({

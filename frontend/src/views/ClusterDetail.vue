@@ -1,9 +1,11 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { useTopicApi } from '../composables/useTopicApi'
 
 const route = useRoute()
 const router = useRouter()
+const { apiUrl, topicPath } = useTopicApi()
 
 const clusters = ref({})
 const allNews = ref([])
@@ -15,8 +17,8 @@ const fetchData = async () => {
     loading.value = true
     error.value = null
     const [clustersRes, newsRes] = await Promise.all([
-      fetch('/api/news/clusters'),
-      fetch('/api/news?limit=500')
+      fetch(apiUrl('/news/clusters')),
+      fetch(apiUrl('/news?limit=500'))
     ])
     if (!clustersRes.ok) throw new Error('Failed to fetch clusters')
     if (!newsRes.ok) throw new Error('Failed to fetch news')
@@ -99,7 +101,7 @@ const formatRelativeTime = (dateString) => {
 }
 
 const goToArticle = (id) => {
-  router.push(`/news/${id}`)
+  router.push(topicPath(`/news/${id}`))
 }
 
 const openExternal = (url, event) => {
@@ -125,12 +127,12 @@ onMounted(() => {
 
     <div v-else-if="!cluster" class="empty-state">
       <p class="text-muted">Cluster not found.</p>
-      <router-link to="/wall" class="back-link">Back to Wall of News</router-link>
+      <router-link :to="topicPath('/wall')" class="back-link">Back to Wall of News</router-link>
     </div>
 
     <template v-else>
       <div class="detail-header">
-        <router-link to="/wall" class="back-link">&larr; Wall of News</router-link>
+        <router-link :to="topicPath('/wall')" class="back-link">&larr; Wall of News</router-link>
         <h1>{{ cluster.name }}</h1>
         <p class="text-muted">{{ cluster.articles.length }} article{{ cluster.articles.length !== 1 ? 's' : '' }}</p>
       </div>

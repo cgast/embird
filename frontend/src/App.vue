@@ -1,10 +1,29 @@
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 
 const route = useRoute()
 const theme = ref('light')
 const mobileMenuOpen = ref(false)
+const topics = ref([])
+
+const topicSlug = computed(() => route.params.topicSlug || 'default')
+
+const fetchTopics = async () => {
+  try {
+    const response = await fetch('/api/topics')
+    if (response.ok) {
+      topics.value = await response.json()
+    }
+  } catch (err) {
+    console.error('Error fetching topics:', err)
+  }
+}
+
+const currentTopicName = computed(() => {
+  const t = topics.value.find(t => t.slug === topicSlug.value)
+  return t ? t.name : topicSlug.value
+})
 
 // Theme toggle
 const toggleTheme = () => {
@@ -18,6 +37,7 @@ onMounted(() => {
   const savedTheme = localStorage.getItem('theme') || 'light'
   theme.value = savedTheme
   document.documentElement.setAttribute('data-theme', savedTheme)
+  fetchTopics()
 })
 
 const toggleMobileMenu = () => {
@@ -48,13 +68,20 @@ const toggleMobileMenu = () => {
           </svg>
         </button>
 
+        <!-- Topic switcher -->
+        <div v-if="topics.length > 1" class="topic-switcher desktop-menu">
+          <select :value="topicSlug" @change="$router.push('/' + $event.target.value + '/')" class="topic-select">
+            <option v-for="t in topics" :key="t.slug" :value="t.slug">{{ t.name }}</option>
+          </select>
+        </div>
+
         <!-- Desktop menu -->
         <div class="navbar-menu desktop-menu">
-          <router-link to="/" :class="{ active: route.name === 'topnews' }">TopNews</router-link>
-          <router-link to="/newnews" :class="{ active: route.name === 'newnews' }">NewNews</router-link>
-          <router-link to="/wall" :class="{ active: route.name === 'wall' }">WallOfNews</router-link>
-          <router-link to="/system" :class="{ active: route.name === 'system' }">System</router-link>
-          <router-link to="/settings" :class="{ active: route.name === 'settings' }">Settings</router-link>
+          <router-link :to="'/' + topicSlug + '/'" :class="{ active: route.name === 'topnews' }">TopNews</router-link>
+          <router-link :to="'/' + topicSlug + '/newnews'" :class="{ active: route.name === 'newnews' }">NewNews</router-link>
+          <router-link :to="'/' + topicSlug + '/wall'" :class="{ active: route.name === 'wall' }">WallOfNews</router-link>
+          <router-link :to="'/' + topicSlug + '/system'" :class="{ active: route.name === 'system' }">System</router-link>
+          <router-link :to="'/' + topicSlug + '/settings'" :class="{ active: route.name === 'settings' }">Settings</router-link>
 
           <button @click="toggleTheme" class="theme-toggle">
             <svg v-if="theme === 'light'" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -76,11 +103,16 @@ const toggleMobileMenu = () => {
 
         <!-- Mobile menu -->
         <div v-if="mobileMenuOpen" class="navbar-menu mobile-menu">
-          <router-link to="/" :class="{ active: route.name === 'topnews' }" @click="toggleMobileMenu">TopNews</router-link>
-          <router-link to="/newnews" :class="{ active: route.name === 'newnews' }" @click="toggleMobileMenu">NewNews</router-link>
-          <router-link to="/wall" :class="{ active: route.name === 'wall' }" @click="toggleMobileMenu">WallOfNews</router-link>
-          <router-link to="/system" :class="{ active: route.name === 'system' }" @click="toggleMobileMenu">System</router-link>
-          <router-link to="/settings" :class="{ active: route.name === 'settings' }" @click="toggleMobileMenu">Settings</router-link>
+          <div v-if="topics.length > 1" class="mobile-topic-switcher">
+            <select :value="topicSlug" @change="$router.push('/' + $event.target.value + '/'); toggleMobileMenu()" class="topic-select">
+              <option v-for="t in topics" :key="t.slug" :value="t.slug">{{ t.name }}</option>
+            </select>
+          </div>
+          <router-link :to="'/' + topicSlug + '/'" :class="{ active: route.name === 'topnews' }" @click="toggleMobileMenu">TopNews</router-link>
+          <router-link :to="'/' + topicSlug + '/newnews'" :class="{ active: route.name === 'newnews' }" @click="toggleMobileMenu">NewNews</router-link>
+          <router-link :to="'/' + topicSlug + '/wall'" :class="{ active: route.name === 'wall' }" @click="toggleMobileMenu">WallOfNews</router-link>
+          <router-link :to="'/' + topicSlug + '/system'" :class="{ active: route.name === 'system' }" @click="toggleMobileMenu">System</router-link>
+          <router-link :to="'/' + topicSlug + '/settings'" :class="{ active: route.name === 'settings' }" @click="toggleMobileMenu">Settings</router-link>
         </div>
       </div>
     </nav>
@@ -216,6 +248,35 @@ const toggleMobileMenu = () => {
 .theme-toggle:hover {
   color: var(--text-color);
   background-color: var(--bg-color);
+}
+
+.topic-switcher {
+  display: flex;
+  align-items: center;
+}
+
+.topic-select {
+  padding: 0.35rem 0.5rem;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  background: var(--surface-color);
+  color: var(--text-color);
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.topic-select:focus {
+  outline: none;
+  border-color: var(--primary-color);
+}
+
+.mobile-topic-switcher {
+  padding: 0.5rem 0;
+}
+
+.mobile-topic-switcher .topic-select {
+  width: 100%;
 }
 
 .main-content {

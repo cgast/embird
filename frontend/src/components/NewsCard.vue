@@ -1,6 +1,7 @@
 <script setup>
 import { computed } from 'vue'
 import { useRouter } from 'vue-router'
+import { useTopicApi } from '../composables/useTopicApi'
 
 const props = defineProps({
   newsItem: {
@@ -14,6 +15,7 @@ const props = defineProps({
 })
 
 const router = useRouter()
+const { topicPath } = useTopicApi()
 
 const formatDate = (dateString) => {
   const date = new Date(dateString)
@@ -38,7 +40,7 @@ const sourceDomain = computed(() => {
 })
 
 const goToDetail = () => {
-  router.push(`/news/${props.newsItem.id}`)
+  router.push(topicPath(`/news/${props.newsItem.id}`))
 }
 </script>
 

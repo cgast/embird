@@ -1,6 +1,9 @@
 <script setup>
 import { ref, onMounted, onUnmounted, computed, nextTick, watch } from 'vue'
 import * as d3 from 'd3'
+import { useTopicApi } from '../composables/useTopicApi'
+
+const { apiUrl } = useTopicApi()
 
 const stats = ref(null)
 const loading = ref(true)
@@ -16,7 +19,7 @@ const tooltip = ref(null)
 const fetchStats = async () => {
   try {
     loading.value = true
-    const response = await fetch('/api/news/stats')
+    const response = await fetch(apiUrl('/news/stats'))
     if (!response.ok) throw new Error('Failed to fetch stats')
     stats.value = await response.json()
   } catch (err) {
@@ -84,7 +87,7 @@ const fetchUmapData = async () => {
   try {
     umapLoading.value = true
     umapError.value = null
-    const response = await fetch('/api/news/umap')
+    const response = await fetch(apiUrl('/news/umap'))
     if (!response.ok) throw new Error('Failed to fetch UMAP data')
     umapData.value = await response.json()
     umapLoading.value = false
