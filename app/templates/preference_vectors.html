@@ -20,7 +20,7 @@
         {% endif %}
         
         <h2 class="h5 mb-3">Add New Preference Vector</h2>
-        <form method="POST" action="/preference-vectors" class="space-y-4">
+        <form method="POST" action="/{{ topic_slug }}/preference-vectors" class="space-y-4">
             <div class="mb-3">
                 <label class="form-label" for="title">Title</label>
                 <input class="form-control" id="title" name="title" type="text" placeholder="Enter title" required>
@@ -67,7 +67,7 @@
                                             class="btn btn-sm btn-outline-primary">
                                         Edit
                                     </button>
-                                    <form method="POST" action="/preference-vectors/{{ vector.id }}/delete" 
+                                    <form method="POST" action="/{{ topic_slug }}/preference-vectors/{{ vector.id }}/delete" 
                                           class="d-inline">
                                         <button type="submit"
                                                 class="btn btn-sm btn-outline-danger"
@@ -81,7 +81,7 @@
                             <tr id="edit-form-{{ vector.id }}" class="d-none">
                                 <td colspan="4">
                                     <form method="POST" 
-                                          action="/preference-vectors/{{ vector.id }}" 
+                                          action="/{{ topic_slug }}/preference-vectors/{{ vector.id }}" 
                                           class="bg-dark p-3 rounded">
                                         <div class="mb-3">
                                             <label class="form-label" for="edit-title-{{ vector.id }}">Title</label>

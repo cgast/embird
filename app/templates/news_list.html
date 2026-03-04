@@ -19,7 +19,7 @@
         {% if news_items %}
             {% for item in news_items %}
             <div class="row">
-                <div style="font-size: 1.4em;"><a href="/news/{{ item.id }}">{{ item.title }}</a></div>
+                <div style="font-size: 1.4em;"><a href="/{{ topic_slug }}/news/{{ item.id }}">{{ item.title }}</a></div>
                 <div style="font-size: 0.7em;">{{ item.first_seen_at.strftime('%Y-%m-%d %H:%M') }} - {{ item.source_url }}</div>
                 <div>&nbsp;</div>
             </div>
@@ -31,17 +31,17 @@
             <nav aria-label="Page navigation">
                 <ul class="pagination justify-content-center">
                     <li class="page-item {% if page == 1 %}disabled{% endif %}">
-                        <a class="page-link" href="/news?page={{ page - 1 }}{% if current_source %}&source_url={{ current_source }}{% endif %}">Previous</a>
+                        <a class="page-link" href="/{{ topic_slug }}/news?page={{ page - 1 }}{% if current_source %}&source_url={{ current_source }}{% endif %}">Previous</a>
                     </li>
                     
                     {% for i in range(1, total_pages + 1) %}
                     <li class="page-item {% if i == page %}active{% endif %}">
-                        <a class="page-link" href="/news?page={{ i }}{% if current_source %}&source_url={{ current_source }}{% endif %}">{{ i }}</a>
+                        <a class="page-link" href="/{{ topic_slug }}/news?page={{ i }}{% if current_source %}&source_url={{ current_source }}{% endif %}">{{ i }}</a>
                     </li>
                     {% endfor %}
                     
                     <li class="page-item {% if page == total_pages %}disabled{% endif %}">
-                        <a class="page-link" href="/news?page={{ page + 1 }}{% if current_source %}&source_url={{ current_source }}{% endif %}">Next</a>
+                        <a class="page-link" href="/{{ topic_slug }}/news?page={{ page + 1 }}{% if current_source %}&source_url={{ current_source }}{% endif %}">Next</a>
                     </li>
                 </ul>
             </nav>
@@ -70,7 +70,7 @@
                 <h5 class="card-title mb-0">Filter</h5>
             </div>
             <div class="card-body">
-                <form method="get" action="/news" class="row g-3">
+                <form method="get" action="/{{ topic_slug }}/news" class="row g-3">
                     <div class="col-md-6">
                         <label for="source_url" class="form-label">Source</label>
                         <select class="form-select" id="source_url" name="source_url">
@@ -85,7 +85,7 @@
                     <div class="col-12">
                         <button type="submit" class="btn btn-primary">Apply Filter</button>
                         {% if current_source %}
-                        <a href="/news" class="btn btn-outline-secondary">Clear Filter</a>
+                        <a href="/{{ topic_slug }}/news" class="btn btn-outline-secondary">Clear Filter</a>
                         {% endif %}
                     </div>
                 </form>

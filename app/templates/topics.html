@@ -1,0 +1,90 @@
+{% extends "base.html" %}
+
+{% block title %}Topics{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col">
+        <h1>Topics</h1>
+        <p class="lead">Manage topics to organize your news sources and preferences.</p>
+    </div>
+</div>
+
+{% if error %}
+<div class="alert alert-danger">{{ error }}</div>
+{% endif %}
+
+{% if enable_topic_management %}
+<div class="card mb-4">
+    <div class="card-body">
+        <h2 class="h5 mb-3">Create New Topic</h2>
+        <form method="POST" action="/topics">
+            <div class="row g-3">
+                <div class="col-md-4">
+                    <label class="form-label" for="name">Name</label>
+                    <input class="form-control" id="name" name="name" type="text" placeholder="e.g. Tech News" required>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label" for="slug">Slug (URL path)</label>
+                    <input class="form-control" id="slug" name="slug" type="text" placeholder="e.g. tech-news" required pattern="[a-z0-9]+(-[a-z0-9]+)*">
+                    <div class="form-text">Lowercase letters, numbers, and hyphens only</div>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label" for="description">Description</label>
+                    <input class="form-control" id="description" name="description" type="text" placeholder="Optional description">
+                </div>
+            </div>
+            <div class="mt-3">
+                <button class="btn btn-primary" type="submit">Create Topic</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endif %}
+
+<div class="card">
+    <div class="card-body">
+        <h2 class="h5 mb-3">Existing Topics</h2>
+        {% if topics %}
+        <div class="table-responsive">
+            <table class="table table-hover">
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th>Slug</th>
+                        <th>Description</th>
+                        <th>Articles</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for topic in topics %}
+                    <tr>
+                        <td><a href="/{{ topic.slug }}/">{{ topic.name }}</a></td>
+                        <td><code>{{ topic.slug }}</code></td>
+                        <td>{{ topic.description or '' }}</td>
+                        <td>{{ topic_stats.get(topic.id, 0) }}</td>
+                        <td>
+                            <a href="/{{ topic.slug }}/" class="btn btn-sm btn-outline-primary">View</a>
+                            {% if enable_topic_management and topic.slug != 'default' %}
+                            <form method="POST" action="/topics/{{ topic.slug }}/delete" class="d-inline">
+                                <button type="submit" class="btn btn-sm btn-outline-danger"
+                                        onclick="return confirm('Delete topic &quot;{{ topic.name }}&quot; and ALL its data? This cannot be undone.')">
+                                    Delete
+                                </button>
+                            </form>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="alert alert-info">
+            <p class="mb-0">No topics found. Create one using the form above.</p>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

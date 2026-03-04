@@ -103,8 +103,10 @@ document.addEventListener('DOMContentLoaded', function() {
         searchError.classList.add('d-none');
 
         try {
-            // Get the base URL from the current location
-            const baseUrl = window.location.pathname.split('/search')[0] || '';
+            // Get the topic slug from the current URL path (e.g., /tech-news/search -> tech-news)
+            const pathParts = window.location.pathname.split('/').filter(Boolean);
+            const topicSlug = pathParts[0] || '';
+            const baseUrl = '/' + topicSlug;
 
             // Build search URL with optional source filter
             const params = new URLSearchParams();
@@ -113,8 +115,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 params.append('source_url', sourceFilter.value);
             }
 
-            // Perform search using absolute path
-            const response = await fetch(`${baseUrl}/api/news/search?${params}`, {
+            // Perform search using the API endpoint (mounted under /api prefix)
+            const response = await fetch(`/api/${topicSlug}/news/search?${params}`, {
                 headers: {
                     'Accept': 'application/json'
                 }

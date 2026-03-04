@@ -66,13 +66,13 @@ class Crawler:
             logger.error(f"Error during news cleanup: {str(e)}")
             await session.rollback()
 
-    async def crawl_url(self, url_item: URL):
-        """Crawl a single URL."""
+    async def crawl_url(self, url_item: URL, topic_id: int):
+        """Crawl a single URL for a specific topic."""
         try:
             if url_item.type == "rss":
-                await self._crawl_rss(url_item)
+                await self._crawl_rss(url_item, topic_id)
             else:
-                await self._crawl_homepage(url_item)
+                await self._crawl_homepage(url_item, topic_id)
             # Update last_crawled_at after successful crawl
             self.url_db.update_url_crawl_time(url_item.id)
         except Exception as e:
@@ -86,60 +86,54 @@ class Crawler:
         except Exception as e:
             logger.error(f"Error during scheduled cleanup: {str(e)}")
 
-    async def _crawl_rss(self, url_item: URL):
+    async def _crawl_rss(self, url_item: URL, topic_id: int):
         """Crawl an RSS feed."""
         try:
             async with self.semaphore:
                 response = await self.http_client.get(url_item.url)
                 response.raise_for_status()
-            
+
             # Use feedparser to parse the RSS content
             feed = feedparser.parse(response.text)
-            
+
             # Process each entry in the feed
             tasks = []
             for entry in feed.entries:
-                # Extract required data
                 title = entry.get("title", "")
                 link = entry.get("link", "")
-                
-                # Skip entries without title or link
+
                 if not title or not link:
                     continue
-                
-                # Process each item
-                tasks.append(self._process_news_item(title, link, url_item.url))
-            
-            # Wait for all tasks to complete
+
+                tasks.append(self._process_news_item(title, link, url_item.url, topic_id))
+
             await asyncio.gather(*tasks)
-            
+
         except httpx.HTTPError as e:
             logger.error(f"HTTP error crawling RSS feed {url_item.url}: {str(e)}")
         except Exception as e:
             logger.error(f"Error crawling RSS feed {url_item.url}: {str(e)}")
 
-    async def _crawl_homepage(self, url_item: URL):
+    async def _crawl_homepage(self, url_item: URL, topic_id: int):
         """Crawl a homepage and extract news links."""
         try:
             async with self.semaphore:
                 response = await self.http_client.get(url_item.url)
                 response.raise_for_status()
-            
-            # Extract links using the extractor
+
             links = self.extractor.extract_links(response.text, url_item.url)
-            
-            # Process each link
+
             tasks = []
             for link_info in links:
                 tasks.append(self._process_news_item(
-                    link_info["title"], 
+                    link_info["title"],
                     link_info["url"],
-                    url_item.url
+                    url_item.url,
+                    topic_id
                 ))
-            
-            # Wait for all tasks to complete
+
             await asyncio.gather(*tasks)
-            
+
         except httpx.HTTPError as e:
             logger.error(f"HTTP error crawling homepage {url_item.url}: {str(e)}")
         except Exception as e:
@@ -151,15 +145,14 @@ class Crawler:
             async with self.semaphore:
                 response = await self.http_client.get(url)
                 response.raise_for_status()
-            
-            # Extract content using the extractor
+
             content = self.extractor.extract_content(response.text, url)
             if not content:
                 logger.warning(f"Failed to extract content from {url}")
                 return None
-                
+
             return content
-            
+
         except httpx.HTTPStatusError as e:
             logger.error(f"HTTP error fetching content from {url}: {str(e)} (status {e.response.status_code})")
             return None
@@ -170,60 +163,58 @@ class Crawler:
             logger.error(f"Error fetching content from {url}: {str(e)}")
             return None
 
-    async def _process_news_item(self, title: str, url: str, source_url: str):
-        """Process a news item link."""
-        # Skip if title or URL is empty
+    async def _process_news_item(self, title: str, url: str, source_url: str, topic_id: int):
+        """Process a news item link for a specific topic."""
         if not title or not url:
             return
-        
+
         try:
-            # Create a database session
             async with AsyncSessionLocal() as session:
-                # Check if the URL already exists in the database
-                result = await session.execute(select(NewsItem).filter(NewsItem.url == url))
+                # Check if the URL already exists for this topic
+                result = await session.execute(
+                    select(NewsItem).filter(
+                        NewsItem.url == url,
+                        NewsItem.topic_id == topic_id
+                    )
+                )
                 existing_item = result.scalars().first()
-                
+
                 if existing_item:
-                    # Update existing item with timezone-aware UTC time
                     existing_item.hit_count += 1
                     existing_item.last_seen_at = datetime.now(timezone.utc)
                     await session.commit()
                     logger.info(f"Updated existing news item: {title}")
                 else:
-                    # Get content and summary for new item
                     content_info = await self._fetch_content(url)
-                    
+
                     if not content_info:
                         logger.warning(f"Failed to extract content from {url}")
                         return
-                    
-                    # Create embedding based on settings
+
                     text_for_embedding = title if settings.EMBED_TITLE_ONLY else f"{title}. {content_info['summary']}"
                     embedding = await self.embedding_service.get_embedding(text_for_embedding)
-                    
-                    # Skip if embedding generation failed
+
                     if not embedding:
                         logger.warning(f"Failed to generate embedding for {url}")
                         return
-                    
-                    # Create new news item with timezone-aware UTC time
+
                     now = datetime.now(timezone.utc)
                     news_item = NewsItem(
                         title=title,
                         summary=content_info["summary"],
                         url=url,
                         source_url=source_url,
+                        topic_id=topic_id,
                         first_seen_at=now,
                         last_seen_at=now,
                         hit_count=1,
                         embedding=embedding
                     )
-                    
-                    # Add to database
+
                     session.add(news_item)
                     await session.commit()
-                    logger.info(f"Added new news item: {title}")
-        
+                    logger.info(f"Added new news item: {title} (topic_id={topic_id})")
+
         except Exception as e:
             logger.error(f"Error processing news item {url}: {str(e)}")
 
@@ -238,27 +229,24 @@ async def start_crawler():
     """Start the crawler service."""
     global crawler
     from app.services.db import url_db
-    
+
     try:
-        # Initialize crawler
         crawler = Crawler(url_db)
         logger.info("Crawler service initialized")
-        
+
         while True:
-            # Run cleanup once per cycle, not per article
             await crawler.run_cleanup()
 
-            # Get all URLs to crawl
+            # Get all URLs across all topics
             urls = url_db.get_all_urls()
 
-            # Crawl each URL
+            # Crawl each URL with its associated topic_id
             for url in urls:
-                await crawler.crawl_url(url)
+                await crawler.crawl_url(url, url.topic_id)
 
-            # Sleep for the configured interval
             logger.info(f"Crawler cycle completed, sleeping for {settings.CRAWLER_INTERVAL} seconds")
             await asyncio.sleep(settings.CRAWLER_INTERVAL)
-            
+
     except Exception as e:
         logger.error(f"Crawler service error: {str(e)}")
         if crawler:

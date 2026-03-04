@@ -24,7 +24,7 @@
         </div>
         {% endif %}
         
-        <form method="POST" action="/urls/add">
+        <form method="POST" action="/{{ topic_slug }}/urls/add">
             <div class="mb-3">
                 <label for="url" class="form-label">URL</label>
                 <input type="url" class="form-control" id="url" name="url" required 
@@ -42,7 +42,7 @@
             </div>
             
             <div class="d-flex justify-content-between">
-                <a href="/urls" class="btn btn-outline-secondary">Cancel</a>
+                <a href="/{{ topic_slug }}/urls" class="btn btn-outline-secondary">Cancel</a>
                 <button type="submit" class="btn btn-primary">Add URL</button>
             </div>
         </form>
@@ -65,10 +65,10 @@
                 
                 <p>This action cannot be undone.</p>
                 
-                <form method="post" action="/urls/{{ url.id }}/delete">
+                <form method="post" action="/{{ topic_slug }}/urls/{{ url.id }}/delete">
                     <div class="d-grid gap-2">
                         <button type="submit" class="btn btn-danger">Yes, Delete URL</button>
-                        <a href="/urls" class="btn btn-outline-secondary">Cancel</a>
+                        <a href="/{{ topic_slug }}/urls" class="btn btn-outline-secondary">Cancel</a>
                     </div>
                 </form>
             </div>
@@ -82,7 +82,7 @@
     <div class="card-body">
         {% if enable_url_management %}
         <div class="mb-3">
-            <a href="/urls/add" class="btn btn-primary">Add New URL</a>
+            <a href="/{{ topic_slug }}/urls/add" class="btn btn-primary">Add New URL</a>
         </div>
         {% endif %}
 
@@ -116,9 +116,9 @@
                             {% endif %}
                         </td>
                         <td>
-                            <a href="/news?source_url={{ url.url }}" class="btn btn-sm btn-outline-primary">View News</a>
+                            <a href="/{{ topic_slug }}/news?source_url={{ url.url }}" class="btn btn-sm btn-outline-primary">View News</a>
                             {% if enable_url_management %}
-                            <a href="/urls/{{ url.id }}/delete" class="btn btn-sm btn-outline-danger">Delete</a>
+                            <a href="/{{ topic_slug }}/urls/{{ url.id }}/delete" class="btn btn-sm btn-outline-danger">Delete</a>
                             {% endif %}
                         </td>
                     </tr>
