@@ -2,7 +2,7 @@
 import { ref, onMounted } from 'vue'
 import { useTopicApi } from '../composables/useTopicApi'
 
-const { apiUrl } = useTopicApi()
+const { apiUrl, topicSlug } = useTopicApi()
 
 // Tab state
 const activeTab = ref('preferences')
@@ -20,6 +20,14 @@ const vectorsError = ref(null)
 const showAddVectorForm = ref(false)
 const editingVectorId = ref(null)
 const newVector = ref({ title: '', description: '' })
+
+// Topic state
+const topic = ref(null)
+const topicLoading = ref(true)
+const topicError = ref(null)
+const topicSuccess = ref(null)
+const editingTopic = ref(false)
+const topicForm = ref({ name: '', description: '' })
 
 // Sources state
 const sources = ref([])
@@ -140,6 +148,56 @@ const saveEditVector = async (vector) => {
   }
 }
 
+// Topic methods
+const fetchTopic = async () => {
+  try {
+    topicLoading.value = true
+    topicError.value = null
+    const response = await fetch(`/api/topics/${topicSlug.value}`)
+    if (!response.ok) throw new Error('Failed to fetch topic')
+    topic.value = await response.json()
+  } catch (err) {
+    topicError.value = err.message
+  } finally {
+    topicLoading.value = false
+  }
+}
+
+const startEditTopic = () => {
+  topicForm.value = { name: topic.value.name, description: topic.value.description || '' }
+  editingTopic.value = true
+  topicSuccess.value = null
+}
+
+const cancelEditTopic = () => {
+  editingTopic.value = false
+  topicError.value = null
+}
+
+const saveEditTopic = async () => {
+  if (!topicForm.value.name.trim()) {
+    topicError.value = 'Name is required'
+    return
+  }
+  try {
+    topicError.value = null
+    const response = await fetch(`/api/topics/${topicSlug.value}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(topicForm.value)
+    })
+    if (!response.ok) {
+      const data = await response.json().catch(() => ({}))
+      throw new Error(data.detail || 'Failed to update topic')
+    }
+    topic.value = await response.json()
+    editingTopic.value = false
+    topicSuccess.value = 'Topic updated successfully'
+  } catch (err) {
+    topicError.value = err.message
+  }
+}
+
 // Sources methods
 const fetchSources = async () => {
   try {
@@ -207,6 +265,7 @@ onMounted(() => {
   checkLogin()
   fetchVectors()
   fetchSources()
+  fetchTopic()
 })
 </script>
 
@@ -230,6 +289,13 @@ onMounted(() => {
         @click="activeTab = 'sources'"
       >
         Sources
+      </button>
+      <button
+        v-if="isLoggedIn"
+        :class="['tab', { active: activeTab === 'topic' }]"
+        @click="activeTab = 'topic'"
+      >
+        Topic
       </button>
     </div>
 
@@ -389,6 +455,80 @@ onMounted(() => {
           <circle cx="5" cy="19" r="1"></circle>
         </svg>
         <p class="text-muted">No sources configured.</p>
+      </div>
+    </div>
+
+    <!-- Topic tab -->
+    <div v-if="activeTab === 'topic' && isLoggedIn" class="tab-content">
+      <!-- Error alert -->
+      <div v-if="topicError" class="alert mb-3">
+        <strong>Error:</strong> {{ topicError }}
+        <button @click="topicError = null" class="btn btn-sm btn-outline" style="float: right;">Dismiss</button>
+      </div>
+
+      <!-- Success alert -->
+      <div v-if="topicSuccess" class="alert alert-success mb-3">
+        {{ topicSuccess }}
+        <button @click="topicSuccess = null" class="btn btn-sm btn-outline" style="float: right;">Dismiss</button>
+      </div>
+
+      <!-- Loading state -->
+      <div v-if="topicLoading" class="loading-container">
+        <div class="spinner"></div>
+        <p class="text-muted">Loading topic...</p>
+      </div>
+
+      <!-- Topic details -->
+      <div v-else-if="topic" class="card">
+        <div class="card-header">
+          <h2>Edit Topic</h2>
+          <button v-if="!editingTopic" @click="startEditTopic" class="btn btn-primary btn-sm">
+            Edit
+          </button>
+        </div>
+
+        <!-- View mode -->
+        <div v-if="!editingTopic" class="card-body">
+          <div class="topic-detail">
+            <label class="topic-label">Name</label>
+            <p class="topic-value">{{ topic.name }}</p>
+          </div>
+          <div class="topic-detail">
+            <label class="topic-label">Slug</label>
+            <p class="topic-value text-muted">{{ topic.slug }}</p>
+          </div>
+          <div class="topic-detail">
+            <label class="topic-label">Description</label>
+            <p class="topic-value">{{ topic.description || 'No description' }}</p>
+          </div>
+          <div class="topic-detail">
+            <label class="topic-label">Last Updated</label>
+            <p class="topic-value text-muted">{{ formatDate(topic.updated_at) }}</p>
+          </div>
+        </div>
+
+        <!-- Edit mode -->
+        <div v-else class="card-body">
+          <form @submit.prevent="saveEditTopic">
+            <div class="form-group mb-3">
+              <label>Name</label>
+              <input v-model="topicForm.name" type="text" placeholder="Topic name" required />
+            </div>
+            <div class="form-group mb-3">
+              <label>Description</label>
+              <textarea v-model="topicForm.description" rows="4" placeholder="Topic description"></textarea>
+            </div>
+            <div class="form-actions">
+              <button type="submit" class="btn btn-primary">Save</button>
+              <button type="button" @click="cancelEditTopic" class="btn btn-outline">Cancel</button>
+            </div>
+          </form>
+        </div>
+      </div>
+
+      <!-- Empty state -->
+      <div v-else class="empty-state">
+        <p class="text-muted">Topic not found.</p>
       </div>
     </div>
 
@@ -709,6 +849,39 @@ onMounted(() => {
 
 .source-actions {
   flex-shrink: 0;
+}
+
+/* Topic details */
+.topic-detail {
+  margin-bottom: 1rem;
+}
+
+.topic-detail:last-child {
+  margin-bottom: 0;
+}
+
+.topic-label {
+  display: block;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+  margin-bottom: 0.25rem;
+}
+
+.topic-value {
+  font-size: 1rem;
+  color: var(--text-color);
+  margin: 0;
+}
+
+.alert-success {
+  background-color: rgba(16, 185, 129, 0.1);
+  border: 1px solid rgba(16, 185, 129, 0.3);
+  color: #065f46;
+  padding: 0.75rem 1rem;
+  border-radius: 6px;
 }
 
 /* Common */
