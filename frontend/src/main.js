@@ -11,10 +11,11 @@ import WallOfNews from './views/WallOfNews.vue'
 import NewsDetail from './views/NewsDetail.vue'
 import ClusterDetail from './views/ClusterDetail.vue'
 import Settings from './views/Settings.vue'
+import LandingPage from './views/LandingPage.vue'
 
 // Define routes — all scoped under /:topicSlug
 const routes = [
-  { path: '/', redirect: '/default/' },
+  { path: '/', name: 'landing', component: LandingPage },
   { path: '/:topicSlug/', name: 'topnews', component: ClusterHome },
   { path: '/:topicSlug/newnews', name: 'newnews', component: Archive },
   { path: '/:topicSlug/wall', name: 'wall', component: WallOfNews },
