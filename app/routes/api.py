@@ -2,6 +2,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, text
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import selectinload
 from typing import List, Optional, Dict, Tuple
 from pgvector.sqlalchemy import Vector
@@ -328,13 +329,17 @@ async def get_news_clusters(topic_slug: str, db: AsyncSession = Depends(get_db))
         else:
             cluster_data = await generate_clusters(db, settings.VISUALIZATION_TIME_RANGE, settings.VISUALIZATION_SIMILARITY, topic_id=topic.id)
 
-            new_clusters = NewsClusters(
+            stmt = pg_insert(NewsClusters).values(
                 topic_id=topic.id,
                 hours=settings.VISUALIZATION_TIME_RANGE,
                 min_similarity=settings.VISUALIZATION_SIMILARITY,
-                clusters=cluster_data
+                clusters=cluster_data,
+                created_at=func.now()
+            ).on_conflict_do_update(
+                constraint='uix_topic_hours_similarity',
+                set_=dict(clusters=cluster_data, created_at=func.now())
             )
-            db.add(new_clusters)
+            await db.execute(stmt)
             await db.commit()
 
         def _serialize_article(item):
