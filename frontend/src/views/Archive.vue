@@ -2,6 +2,9 @@
 import { ref, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import NewsCard from '../components/NewsCard.vue'
+import { useTopicApi } from '../composables/useTopicApi'
+
+const { apiUrl } = useTopicApi()
 
 const route = useRoute()
 const router = useRouter()
@@ -22,7 +25,7 @@ const mode = ref('browse') // 'browse' or 'search'
 
 const fetchSources = async () => {
   try {
-    const response = await fetch('/api/urls')
+    const response = await fetch(apiUrl('/urls'))
     if (!response.ok) throw new Error('Failed to fetch sources')
     const urls = await response.json()
     sources.value = urls.map(u => u.url).sort()
@@ -42,7 +45,7 @@ const fetchNews = async () => {
     }
     params.append('limit', '100')
 
-    const response = await fetch(`/api/news?${params}`)
+    const response = await fetch(apiUrl(`/news?${params}`))
     if (!response.ok) throw new Error('Failed to fetch news')
 
     news.value = await response.json()
@@ -76,7 +79,7 @@ const performSearch = async () => {
       params.append('source_url', sourceFilter.value)
     }
 
-    const response = await fetch(`/api/news/search?${params}`)
+    const response = await fetch(apiUrl(`/news/search?${params}`))
     if (!response.ok) {
       const errorData = await response.json()
       throw new Error(errorData.detail || 'Search failed')

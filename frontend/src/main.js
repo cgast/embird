@@ -12,15 +12,16 @@ import NewsDetail from './views/NewsDetail.vue'
 import ClusterDetail from './views/ClusterDetail.vue'
 import Settings from './views/Settings.vue'
 
-// Define routes
+// Define routes — all scoped under /:topicSlug
 const routes = [
-  { path: '/', name: 'topnews', component: ClusterHome },
-  { path: '/newnews', name: 'newnews', component: Archive },
-  { path: '/wall', name: 'wall', component: WallOfNews },
-  { path: '/cluster/:id', name: 'cluster-detail', component: ClusterDetail },
-  { path: '/system', name: 'system', component: Dashboard },
-  { path: '/news/:id', name: 'news-detail', component: NewsDetail },
-  { path: '/settings', name: 'settings', component: Settings },
+  { path: '/', redirect: '/default/' },
+  { path: '/:topicSlug/', name: 'topnews', component: ClusterHome },
+  { path: '/:topicSlug/newnews', name: 'newnews', component: Archive },
+  { path: '/:topicSlug/wall', name: 'wall', component: WallOfNews },
+  { path: '/:topicSlug/cluster/:id', name: 'cluster-detail', component: ClusterDetail },
+  { path: '/:topicSlug/system', name: 'system', component: Dashboard },
+  { path: '/:topicSlug/news/:id', name: 'news-detail', component: NewsDetail },
+  { path: '/:topicSlug/settings', name: 'settings', component: Settings },
 ]
 
 // Create router

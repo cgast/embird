@@ -1,8 +1,10 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
+import { useTopicApi } from '../composables/useTopicApi'
 
 const router = useRouter()
+const { apiUrl, topicPath } = useTopicApi()
 
 const clusters = ref({})
 const loading = ref(true)
@@ -13,7 +15,7 @@ const fetchClusters = async () => {
   try {
     loading.value = true
     error.value = null
-    const response = await fetch('/api/news/clusters')
+    const response = await fetch(apiUrl('/news/clusters'))
     if (!response.ok) throw new Error('Failed to fetch clusters')
     clusters.value = await response.json()
   } catch (err) {
@@ -161,7 +163,7 @@ const isExpanded = (topicId) => expandedClusters.value.has(topicId)
 
 const goToArticle = (id, event) => {
   event.stopPropagation()
-  router.push(`/news/${id}`)
+  router.push(topicPath(`/news/${id}`))
 }
 
 const formatScore = (score) => {

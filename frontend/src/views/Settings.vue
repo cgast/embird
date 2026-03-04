@@ -1,5 +1,8 @@
 <script setup>
 import { ref, onMounted } from 'vue'
+import { useTopicApi } from '../composables/useTopicApi'
+
+const { apiUrl } = useTopicApi()
 
 // Tab state
 const activeTab = ref('preferences')
@@ -74,7 +77,7 @@ const fetchVectors = async () => {
   try {
     vectorsLoading.value = true
     vectorsError.value = null
-    const response = await fetch('/api/preference-vectors')
+    const response = await fetch(apiUrl('/preference-vectors'))
     if (!response.ok) throw new Error('Failed to fetch preference vectors')
     vectors.value = await response.json()
   } catch (err) {
@@ -91,7 +94,7 @@ const createVector = async () => {
   }
 
   try {
-    const response = await fetch('/api/preference-vectors', {
+    const response = await fetch(apiUrl('/preference-vectors'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(newVector.value)
@@ -111,7 +114,7 @@ const createVector = async () => {
 const deleteVector = async (id) => {
   if (!confirm('Are you sure you want to delete this vector?')) return
   try {
-    const response = await fetch(`/api/preference-vectors/${id}`, { method: 'DELETE' })
+    const response = await fetch(apiUrl(`/preference-vectors/${id}`), { method: 'DELETE' })
     if (!response.ok) throw new Error('Failed to delete vector')
     await fetchVectors()
   } catch (err) {
@@ -124,7 +127,7 @@ const cancelEditVector = () => { editingVectorId.value = null }
 
 const saveEditVector = async (vector) => {
   try {
-    const response = await fetch(`/api/preference-vectors/${vector.id}`, {
+    const response = await fetch(apiUrl(`/preference-vectors/${vector.id}`), {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ title: vector.title, description: vector.description })
@@ -142,7 +145,7 @@ const fetchSources = async () => {
   try {
     sourcesLoading.value = true
     sourcesError.value = null
-    const response = await fetch('/api/urls')
+    const response = await fetch(apiUrl('/urls'))
     if (!response.ok) throw new Error('Failed to fetch sources')
     sources.value = await response.json()
   } catch (err) {
@@ -159,7 +162,7 @@ const addSource = async () => {
   }
 
   try {
-    const response = await fetch('/api/urls', {
+    const response = await fetch(apiUrl('/urls'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(newSource.value)
@@ -179,7 +182,7 @@ const addSource = async () => {
 const deleteSource = async (id) => {
   if (!confirm('Are you sure you want to delete this source?')) return
   try {
-    const response = await fetch(`/api/urls/${id}`, { method: 'DELETE' })
+    const response = await fetch(apiUrl(`/urls/${id}`), { method: 'DELETE' })
     if (!response.ok) throw new Error('Failed to delete source')
     await fetchSources()
   } catch (err) {

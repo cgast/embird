@@ -1,6 +1,9 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import NewsCard from '../components/NewsCard.vue'
+import { useTopicApi } from '../composables/useTopicApi'
+
+const { apiUrl } = useTopicApi()
 
 const searchQuery = ref('')
 const searchResults = ref([])
@@ -12,7 +15,7 @@ const sources = ref([])
 
 const fetchSources = async () => {
   try {
-    const response = await fetch('/api/urls')
+    const response = await fetch(apiUrl('/urls'))
     if (!response.ok) throw new Error('Failed to fetch sources')
     const urls = await response.json()
     sources.value = urls.map(u => u.url).sort()
@@ -48,7 +51,7 @@ const performSearch = async () => {
       params.append('source_url', sourceFilter.value)
     }
 
-    const response = await fetch(`/api/news/search?${params}`)
+    const response = await fetch(apiUrl(`/news/search?${params}`))
 
     if (!response.ok) {
       const errorData = await response.json()

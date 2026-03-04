@@ -1,9 +1,11 @@
 <script setup>
 import { ref, computed, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { useTopicApi } from '../composables/useTopicApi'
 
 const route = useRoute()
 const router = useRouter()
+const { apiUrl, topicPath } = useTopicApi()
 
 const newsItem = ref(null)
 const relatedItems = ref([])
@@ -46,7 +48,7 @@ const fetchNewsDetail = async () => {
     error.value = null
 
     const newsId = route.params.id
-    const response = await fetch(`/api/news/${newsId}`)
+    const response = await fetch(apiUrl(`/news/${newsId}`))
     if (!response.ok) {
       if (response.status === 404) throw new Error('News article not found')
       throw new Error('Failed to fetch news details')
@@ -63,8 +65,8 @@ const fetchNewsDetail = async () => {
 
     // Fetch related news (same source) and similar news (all sources) in parallel
     const [relatedResponse, similarResponse] = await Promise.all([
-      fetch(`/api/news?source_url=${encodeURIComponent(newsItem.value.source_url)}&limit=5`),
-      fetch(`/api/news/${newsId}/similar?limit=5`)
+      fetch(apiUrl(`/news?source_url=${encodeURIComponent(newsItem.value.source_url)}&limit=5`)),
+      fetch(apiUrl(`/news/${newsId}/similar?limit=5`))
     ])
 
     if (relatedResponse.ok) {
@@ -145,7 +147,7 @@ watch(() => route.params.id, () => {
           <router-link
             v-for="item in relatedItems"
             :key="item.id"
-            :to="`/news/${item.id}`"
+            :to="topicPath(`/news/${item.id}`)"
             class="related-item"
           >
             <h3>{{ item.title }}</h3>
@@ -160,7 +162,7 @@ watch(() => route.params.id, () => {
           <router-link
             v-for="item in similarItems"
             :key="item.id"
-            :to="`/news/${item.id}`"
+            :to="topicPath(`/news/${item.id}`)"
             class="related-item"
           >
             <h3>{{ item.title }}</h3>

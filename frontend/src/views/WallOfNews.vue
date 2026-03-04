@@ -1,8 +1,10 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
+import { useTopicApi } from '../composables/useTopicApi'
 
 const router = useRouter()
+const { apiUrl, topicPath } = useTopicApi()
 
 const clusters = ref({})
 const allNews = ref([])
@@ -16,8 +18,8 @@ const fetchData = async () => {
     error.value = null
 
     const [clustersRes, newsRes] = await Promise.all([
-      fetch('/api/news/clusters'),
-      fetch('/api/news?limit=500')
+      fetch(apiUrl('/news/clusters')),
+      fetch(apiUrl('/news?limit=500'))
     ])
 
     if (!clustersRes.ok) throw new Error('Failed to fetch clusters')
@@ -193,7 +195,7 @@ const formatRelativeTime = (dateString) => {
 }
 
 const goToArticle = (id) => {
-  router.push(`/news/${id}`)
+  router.push(topicPath(`/news/${id}`))
 }
 
 const openExternal = (url, event) => {
@@ -209,7 +211,7 @@ const formatScore = (score) => {
 const MAX_VISIBLE = 5
 
 const goToCluster = (sectionId) => {
-  router.push(`/cluster/${encodeURIComponent(sectionId)}`)
+  router.push(topicPath(`/cluster/${encodeURIComponent(sectionId)}`))
 }
 
 onMounted(() => {

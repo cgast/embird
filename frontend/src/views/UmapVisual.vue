@@ -1,6 +1,9 @@
 <script setup>
 import { ref, onMounted, onUnmounted, nextTick } from 'vue'
 import * as d3 from 'd3'
+import { useTopicApi } from '../composables/useTopicApi'
+
+const { apiUrl } = useTopicApi()
 
 const loading = ref(true)
 const error = ref(null)
@@ -13,7 +16,7 @@ const fetchUmapData = async () => {
     loading.value = true
     error.value = null
 
-    const response = await fetch('/api/news/umap')
+    const response = await fetch(apiUrl('/news/umap'))
     if (!response.ok) throw new Error('Failed to fetch UMAP data')
 
     umapData.value = await response.json()

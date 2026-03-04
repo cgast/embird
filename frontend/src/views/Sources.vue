@@ -1,5 +1,8 @@
 <script setup>
 import { ref, onMounted } from 'vue'
+import { useTopicApi } from '../composables/useTopicApi'
+
+const { apiUrl } = useTopicApi()
 
 const sources = ref([])
 const loading = ref(true)
@@ -16,7 +19,7 @@ const fetchSources = async () => {
     loading.value = true
     error.value = null
 
-    const response = await fetch('/api/urls')
+    const response = await fetch(apiUrl('/urls'))
     if (!response.ok) throw new Error('Failed to fetch sources')
 
     sources.value = await response.json()
@@ -36,7 +39,7 @@ const addSource = async () => {
   }
 
   try {
-    const response = await fetch('/api/urls', {
+    const response = await fetch(apiUrl('/urls'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(newSource.value)
@@ -60,7 +63,7 @@ const deleteSource = async (id) => {
   if (!confirm('Are you sure you want to delete this source?')) return
 
   try {
-    const response = await fetch(`/api/urls/${id}`, {
+    const response = await fetch(apiUrl(`/urls/${id}`), {
       method: 'DELETE'
     })
 
