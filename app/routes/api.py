@@ -20,7 +20,7 @@ from app.models.news import (
     NewsClustersResponse, NewsUMAPResponse
 )
 from app.models.preference_vector import PreferenceVector, PreferenceVectorCreate, PreferenceVectorResponse
-from app.models.topic import Topic, TopicCreate, TopicResponse
+from app.models.topic import Topic, TopicCreate, TopicUpdate, TopicResponse
 from app.services.db import get_db, url_db, get_all_topics
 from app.services.embedding import get_embedding_service, EmbeddingService
 from app.services.visualization import generate_clusters, generate_umap_visualization
@@ -87,6 +87,20 @@ async def create_topic(topic_data: TopicCreate, db: AsyncSession = Depends(get_d
 async def get_topic(topic_slug: str, db: AsyncSession = Depends(get_db)):
     """Get a topic by slug."""
     return await _resolve_topic(topic_slug, db)
+
+@router.put("/topics/{topic_slug}", response_model=TopicResponse)
+async def update_topic(topic_slug: str, topic_data: TopicUpdate, db: AsyncSession = Depends(get_db)):
+    """Update a topic's name and/or description."""
+    if not settings.ENABLE_TOPIC_MANAGEMENT:
+        raise HTTPException(status_code=403, detail="Topic management is disabled")
+    topic = await _resolve_topic(topic_slug, db)
+    if topic_data.name is not None:
+        topic.name = topic_data.name
+    if topic_data.description is not None:
+        topic.description = topic_data.description
+    await db.commit()
+    await db.refresh(topic)
+    return topic
 
 @router.delete("/topics/{topic_slug}")
 async def delete_topic(topic_slug: str, db: AsyncSession = Depends(get_db)):

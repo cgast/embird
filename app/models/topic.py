@@ -52,6 +52,18 @@ class TopicCreate(TopicBase):
     pass
 
 
+class TopicUpdate(BaseModel):
+    """Model for updating a topic's name and description."""
+    name: Optional[str] = None
+    description: Optional[str] = None
+
+    @validator('name')
+    def validate_name(cls, v):
+        if v is not None and not v.strip():
+            raise ValueError('Name cannot be empty')
+        return v.strip() if v else v
+
+
 class TopicResponse(TopicBase):
     """Model for returning a topic."""
     id: int
