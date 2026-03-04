@@ -28,10 +28,86 @@ AsyncSessionLocal = sessionmaker(
 url_db = URLDatabase(settings.SQLITE_PATH)
 
 async def init_db():
-    """Initialize the database with required tables."""
+    """Initialize the database with required tables and run migrations."""
     async with async_engine.begin() as conn:
         # Create all tables if they don't exist
         await conn.run_sync(NewsBase.metadata.create_all)
+
+        # Run migrations for existing databases that predate multi-topic support
+        from sqlalchemy import text
+        await conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS topics (
+                id SERIAL PRIMARY KEY,
+                name TEXT NOT NULL,
+                slug TEXT NOT NULL UNIQUE,
+                description TEXT,
+                created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+                updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+            )
+        """))
+        await conn.execute(text("""
+            INSERT INTO topics (name, slug, description)
+            VALUES ('Default', 'default', 'Default topic')
+            ON CONFLICT (slug) DO NOTHING
+        """))
+
+        # Add topic_id to news if missing
+        result = await conn.execute(text("""
+            SELECT 1 FROM information_schema.columns
+            WHERE table_name='news' AND column_name='topic_id'
+        """))
+        if not result.fetchone():
+            await conn.execute(text("ALTER TABLE news ADD COLUMN topic_id INTEGER NOT NULL DEFAULT 1"))
+            await conn.execute(text("""
+                ALTER TABLE news ADD CONSTRAINT fk_news_topic
+                FOREIGN KEY (topic_id) REFERENCES topics(id)
+            """))
+
+        # Add topic_id to news_clusters if missing
+        result = await conn.execute(text("""
+            SELECT 1 FROM information_schema.columns
+            WHERE table_name='news_clusters' AND column_name='topic_id'
+        """))
+        if not result.fetchone():
+            await conn.execute(text("ALTER TABLE news_clusters ADD COLUMN topic_id INTEGER NOT NULL DEFAULT 1"))
+            await conn.execute(text("""
+                ALTER TABLE news_clusters ADD CONSTRAINT fk_news_clusters_topic
+                FOREIGN KEY (topic_id) REFERENCES topics(id)
+            """))
+
+        # Add topic_id to news_umap if missing
+        result = await conn.execute(text("""
+            SELECT 1 FROM information_schema.columns
+            WHERE table_name='news_umap' AND column_name='topic_id'
+        """))
+        if not result.fetchone():
+            await conn.execute(text("ALTER TABLE news_umap ADD COLUMN topic_id INTEGER NOT NULL DEFAULT 1"))
+            await conn.execute(text("""
+                ALTER TABLE news_umap ADD CONSTRAINT fk_news_umap_topic
+                FOREIGN KEY (topic_id) REFERENCES topics(id)
+            """))
+
+        # Add min_similarity to news_umap if missing
+        result = await conn.execute(text("""
+            SELECT 1 FROM information_schema.columns
+            WHERE table_name='news_umap' AND column_name='min_similarity'
+        """))
+        if not result.fetchone():
+            await conn.execute(text("ALTER TABLE news_umap ADD COLUMN min_similarity FLOAT NOT NULL DEFAULT 0.6"))
+
+        # Add topic_id to preference_vectors if missing
+        result = await conn.execute(text("""
+            SELECT 1 FROM information_schema.columns
+            WHERE table_name='preference_vectors' AND column_name='topic_id'
+        """))
+        if not result.fetchone():
+            await conn.execute(text("ALTER TABLE preference_vectors ADD COLUMN topic_id INTEGER NOT NULL DEFAULT 1"))
+            await conn.execute(text("""
+                ALTER TABLE preference_vectors ADD CONSTRAINT fk_preference_vectors_topic
+                FOREIGN KEY (topic_id) REFERENCES topics(id)
+            """))
+
+    logger.info("Database migrations complete")
 
 async def ensure_default_topic(db: AsyncSession) -> Topic:
     """Ensure the default topic exists, creating it if needed. Returns the topic."""
