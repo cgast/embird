@@ -11,7 +11,7 @@ from datetime import datetime
 from app.routes import web, api
 from app.services.crawler import start_crawler, stop_crawler
 from app.services.faiss_service import get_faiss_service
-from app.services.db import AsyncSessionLocal, ensure_default_topic
+from app.services.db import AsyncSessionLocal, ensure_default_topic, init_db
 from app.config import settings
 
 # Configure logging
@@ -63,6 +63,10 @@ async def add_process_time_header(request: Request, call_next):
 async def startup_event():
     """Initialize services on startup."""
     try:
+        # Ensure database tables exist (including topics)
+        await init_db()
+        logger.info("Database tables ensured")
+
         # Ensure default topic exists
         async with AsyncSessionLocal() as session:
             await ensure_default_topic(session)
