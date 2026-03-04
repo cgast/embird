@@ -17,314 +17,100 @@
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js" defer></script>
     <script defer src="https://umami.subprompt.org/script.js" data-website-id="72150aa4-efc9-4173-a946-cbfeb67be4a9"></script>
     <style>
-        /* Theme Variables */
-        :root {
-            --bs-font-sans-serif: "Geist", "Helvetica Neue", Helvetica, Arial, sans-serif;
-        }
-
-        /* Light Theme (Default) - Monochrome */
-        :root[data-theme="light"], :root:not([data-theme]) {
-            --bs-body-bg: #f5f5f5;
-            --bs-body-color: #111111;
-            --bs-secondary-color: rgba(100, 100, 100, 0.75);
-
-            /* Primary colors - monochrome */
-            --bs-primary: #222222;
-            --bs-primary-rgb: 34, 34, 34;
-            --bs-primary-darken: #000000;
-
-            /* Secondary colors */
-            --bs-secondary: #666666;
-            --bs-secondary-rgb: 102, 102, 102;
-
-            /* Status colors - monochrome grays */
-            --bs-success: #444444;
-            --bs-danger: #333333;
-            --bs-warning: #555555;
-            --bs-info: #777777;
-
-            /* Component colors */
-            --bs-light: #f0f0f0;
-            --bs-dark: #222222;
-            --bs-border-color: #d0d0d0;
-            --bs-card-bg: #ffffff;
-            --bs-modal-bg: #ffffff;
-            --bs-dropdown-bg: #ffffff;
-            --bs-dropdown-link-hover-bg: #f0f0f0;
-            --bs-dropdown-link-active-bg: #222222;
-
-            /* Input fields */
-            --bs-input-bg: #ffffff;
-            --bs-input-color: #111111;
-            --bs-input-border-color: #cccccc;
-            --bs-input-focus-border-color: #222222;
-            --bs-input-focus-box-shadow: 0 0 0 0.25rem rgba(0, 0, 0, 0.15);
-
-            /* Table colors */
-            --bs-table-bg: #ffffff;
-            --bs-table-striped-bg: #f5f5f5;
-            --bs-table-hover-bg: #eeeeee;
-            --bs-table-border-color: #d0d0d0;
-
-            /* Navbar */
-            --navbar-bg: #1a1a1a;
-            --navbar-color: #ffffff;
-
-            /* Links */
-            --link-color: #222222;
-            --link-hover-color: #000000;
-        }
-
-        /* Dark Theme - Monochrome */
-        :root[data-theme="dark"] {
-            --bs-body-bg: #111111;
-            --bs-body-color: #f0f0f0;
-            --bs-secondary-color: rgba(160, 160, 160, 0.75);
-
-            /* Primary colors - monochrome */
-            --bs-primary: #e0e0e0;
-            --bs-primary-rgb: 224, 224, 224;
-            --bs-primary-darken: #ffffff;
-
-            /* Secondary colors */
-            --bs-secondary: #999999;
-            --bs-secondary-rgb: 153, 153, 153;
-
-            /* Status colors - monochrome grays */
-            --bs-success: #aaaaaa;
-            --bs-danger: #cccccc;
-            --bs-warning: #bbbbbb;
-            --bs-info: #999999;
-
-            /* Component colors */
-            --bs-light: #1e1e1e;
-            --bs-dark: #0a0a0a;
-            --bs-border-color: #333333;
-            --bs-card-bg: #1e1e1e;
-            --bs-modal-bg: #1e1e1e;
-            --bs-dropdown-bg: #1e1e1e;
-            --bs-dropdown-link-hover-bg: #2a2a2a;
-            --bs-dropdown-link-active-bg: #e0e0e0;
-
-            /* Input fields */
-            --bs-input-bg: #1e1e1e;
-            --bs-input-color: #f0f0f0;
-            --bs-input-border-color: #444444;
-            --bs-input-focus-border-color: #e0e0e0;
-            --bs-input-focus-box-shadow: 0 0 0 0.25rem rgba(255, 255, 255, 0.15);
-
-            /* Table colors */
-            --bs-table-bg: #1e1e1e;
-            --bs-table-striped-bg: #222222;
-            --bs-table-hover-bg: #2a2a2a;
-            --bs-table-border-color: #333333;
-
-            /* Navbar */
-            --navbar-bg: #0a0a0a;
-            --navbar-color: #f0f0f0;
-
-            /* Links */
-            --link-color: #e0e0e0;
-            --link-hover-color: #ffffff;
-        }
-
-        body {
-            background-color: var(--bs-body-bg);
-            color: var(--bs-body-color);
-            transition: background-color 0.3s ease, color 0.3s ease;
-        }
-
-        /* Primary colors */
-        .bg-primary, .btn-primary {
-            background-color: var(--bs-primary) !important;
-            border-color: var(--bs-primary) !important;
-            color: #fff !important;
-        }
-
-        .btn-primary:hover, .btn-primary:focus {
-            background-color: var(--bs-primary-darken) !important;
-            border-color: var(--bs-primary-darken) !important;
-            color: #fff !important;
-        }
-
-        /* Links */
-        a {
-            color: var(--link-color);
-            text-decoration: none;
-        }
-
-        a:hover {
-            color: var(--link-hover-color);
-            text-decoration: underline;
-        }
-
-        /* Form controls */
-        .form-control, .form-select {
-            background-color: var(--bs-input-bg);
-            color: var(--bs-input-color);
-            border-color: var(--bs-input-border-color);
-        }
-
-        .form-control:focus, .form-select:focus {
-            background-color: var(--bs-input-bg);
-            color: var(--bs-input-color);
-            border-color: var(--bs-input-focus-border-color);
-            box-shadow: var(--bs-input-focus-box-shadow);
-        }
-
-        /* Cards, modals, dropdowns */
-        .card, .modal-content, .dropdown-menu {
-            background-color: var(--bs-card-bg);
-            border-color: var(--bs-border-color);
-        }
-
-        .dropdown-item {
-            color: var(--bs-body-color);
-        }
-
-        .dropdown-item:hover, .dropdown-item:focus {
-            background-color: var(--bs-dropdown-link-hover-bg);
-            color: var(--bs-body-color);
-        }
-
-        .dropdown-item.active, .dropdown-item:active {
-            background-color: var(--bs-dropdown-link-active-bg);
-            color: #000;
-        }
-
-        /* Navbar */
-        .navbar-dark {
-            background-color: var(--navbar-bg) !important;
-        }
-
-        .navbar-dark .navbar-nav .nav-link {
-            color: var(--navbar-color);
-        }
-
-        .navbar-brand img {
-            height: 24px;
-            width: auto;
-            filter: brightness(0) invert(1);
-        }
-
-        #theme-toggle {
-            border-color: var(--bs-border-color);
-            color: var(--bs-body-color);
-        }
-
-        #theme-toggle:hover {
-            background-color: var(--bs-dropdown-link-hover-bg);
-        }
-
-        /* Tables */
-        .table {
-            color: var(--bs-body-color);
-            border-color: var(--bs-table-border-color);
-        }
-
-        .table-striped > tbody > tr:nth-of-type(odd) {
-            background-color: var(--bs-table-striped-bg);
-        }
-
-        .table-hover > tbody > tr:hover {
-            background-color: var(--bs-table-hover-bg);
-        }
-
-        /* Fix for text color in alerts */
-        .alert {
-            color: #212529;
-        }
-
-        .alert-dark {
-            color: var(--bs-body-color);
-        }
-
-        /* Compact news items */
-        .news-item-compact {
-            padding: 0.5rem 0;
-            border-bottom: 1px solid var(--bs-border-color);
-        }
-
-        .news-item-compact:last-child {
-            border-bottom: none;
-        }
-
-        .news-title {
-            font-size: 1rem;
-            font-weight: 500;
-            line-height: 1.4;
-        }
-
-        .news-meta {
-            margin-top: 0.25rem;
-            font-size: 0.75rem;
-        }
-
-        .preference-tag {
-            color: var(--bs-primary);
-            font-weight: 500;
-        }
-
-        /* Scrollbar customization */
-        ::-webkit-scrollbar {
-            width: 8px;
-            height: 8px;
-        }
-
-        ::-webkit-scrollbar-track {
-            background: #1e1e1e;
-        }
-
-        ::-webkit-scrollbar-thumb {
-            background: #444444;
-            border-radius: 4px;
-        }
-
-        ::-webkit-scrollbar-thumb:hover {
-            background: #555555;
-        }
+        :root { --bs-font-sans-serif: "Geist", "Helvetica Neue", Helvetica, Arial, sans-serif; }
+        :root[data-theme="light"], :root:not([data-theme]) { --bs-body-bg: #f5f5f5; --bs-body-color: #111111; --bs-secondary-color: rgba(100, 100, 100, 0.75); --bs-primary: #222222; --bs-primary-rgb: 34, 34, 34; --bs-primary-darken: #000000; --bs-secondary: #666666; --bs-secondary-rgb: 102, 102, 102; --bs-success: #444444; --bs-danger: #333333; --bs-warning: #555555; --bs-info: #777777; --bs-light: #f0f0f0; --bs-dark: #222222; --bs-border-color: #d0d0d0; --bs-card-bg: #ffffff; --bs-modal-bg: #ffffff; --bs-dropdown-bg: #ffffff; --bs-dropdown-link-hover-bg: #f0f0f0; --bs-dropdown-link-active-bg: #222222; --bs-input-bg: #ffffff; --bs-input-color: #111111; --bs-input-border-color: #cccccc; --bs-input-focus-border-color: #222222; --bs-input-focus-box-shadow: 0 0 0 0.25rem rgba(0, 0, 0, 0.15); --bs-table-bg: #ffffff; --bs-table-striped-bg: #f5f5f5; --bs-table-hover-bg: #eeeeee; --bs-table-border-color: #d0d0d0; --navbar-bg: #1a1a1a; --navbar-color: #ffffff; --link-color: #222222; --link-hover-color: #000000; }
+        :root[data-theme="dark"] { --bs-body-bg: #111111; --bs-body-color: #f0f0f0; --bs-secondary-color: rgba(160, 160, 160, 0.75); --bs-primary: #e0e0e0; --bs-primary-rgb: 224, 224, 224; --bs-primary-darken: #ffffff; --bs-secondary: #999999; --bs-secondary-rgb: 153, 153, 153; --bs-success: #aaaaaa; --bs-danger: #cccccc; --bs-warning: #bbbbbb; --bs-info: #999999; --bs-light: #1e1e1e; --bs-dark: #0a0a0a; --bs-border-color: #333333; --bs-card-bg: #1e1e1e; --bs-modal-bg: #1e1e1e; --bs-dropdown-bg: #1e1e1e; --bs-dropdown-link-hover-bg: #2a2a2a; --bs-dropdown-link-active-bg: #e0e0e0; --bs-input-bg: #1e1e1e; --bs-input-color: #f0f0f0; --bs-input-border-color: #444444; --bs-input-focus-border-color: #e0e0e0; --bs-input-focus-box-shadow: 0 0 0 0.25rem rgba(255, 255, 255, 0.15); --bs-table-bg: #1e1e1e; --bs-table-striped-bg: #222222; --bs-table-hover-bg: #2a2a2a; --bs-table-border-color: #333333; --navbar-bg: #0a0a0a; --navbar-color: #f0f0f0; --link-color: #e0e0e0; --link-hover-color: #ffffff; }
+        body { background-color: var(--bs-body-bg); color: var(--bs-body-color); transition: background-color 0.3s ease, color 0.3s ease; }
+        .bg-primary, .btn-primary { background-color: var(--bs-primary) !important; border-color: var(--bs-primary) !important; color: #fff !important; }
+        .btn-primary:hover, .btn-primary:focus { background-color: var(--bs-primary-darken) !important; border-color: var(--bs-primary-darken) !important; color: #fff !important; }
+        a { color: var(--link-color); text-decoration: none; }
+        a:hover { color: var(--link-hover-color); text-decoration: underline; }
+        .form-control, .form-select { background-color: var(--bs-input-bg); color: var(--bs-input-color); border-color: var(--bs-input-border-color); }
+        .form-control:focus, .form-select:focus { background-color: var(--bs-input-bg); color: var(--bs-input-color); border-color: var(--bs-input-focus-border-color); box-shadow: var(--bs-input-focus-box-shadow); }
+        .card, .modal-content, .dropdown-menu { background-color: var(--bs-card-bg); border-color: var(--bs-border-color); }
+        .dropdown-item { color: var(--bs-body-color); }
+        .dropdown-item:hover, .dropdown-item:focus { background-color: var(--bs-dropdown-link-hover-bg); color: var(--bs-body-color); }
+        .dropdown-item.active, .dropdown-item:active { background-color: var(--bs-dropdown-link-active-bg); color: #000; }
+        .navbar-dark { background-color: var(--navbar-bg) !important; }
+        .navbar-dark .navbar-nav .nav-link { color: var(--navbar-color); }
+        .navbar-brand img { height: 24px; width: auto; filter: brightness(0) invert(1); }
+        #theme-toggle { border-color: var(--bs-border-color); color: var(--bs-body-color); }
+        #theme-toggle:hover { background-color: var(--bs-dropdown-link-hover-bg); }
+        .table { color: var(--bs-body-color); border-color: var(--bs-table-border-color); }
+        .table-striped > tbody > tr:nth-of-type(odd) { background-color: var(--bs-table-striped-bg); }
+        .table-hover > tbody > tr:hover { background-color: var(--bs-table-hover-bg); }
+        .alert { color: #212529; } .alert-dark { color: var(--bs-body-color); }
+        .news-item-compact { padding: 0.5rem 0; border-bottom: 1px solid var(--bs-border-color); }
+        .news-item-compact:last-child { border-bottom: none; }
+        .news-title { font-size: 1rem; font-weight: 500; line-height: 1.4; }
+        .news-meta { margin-top: 0.25rem; font-size: 0.75rem; }
+        .preference-tag { color: var(--bs-primary); font-weight: 500; }
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: #1e1e1e; }
+        ::-webkit-scrollbar-thumb { background: #444444; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #555555; }
     </style>
     {% block extra_head %}{% endblock %}
 </head>
 <body>
     <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
         <div class="container">
-            <a class="navbar-brand d-flex align-items-center gap-2" href="/"><img src="/static/img/embird-logo-bird-v2.png" alt="EmBird" style="height:24px;width:auto;"><img src="/static/img/embird-text.svg" alt="embird" style="height:16px;width:auto;"></a>
+            <a class="navbar-brand d-flex align-items-center gap-2" href="{% if topic_slug %}/{{ topic_slug }}/{% else %}/{% endif %}"><img src="/static/img/embird-logo-bird-v2.png" alt="EmBird" style="height:24px;width:auto;"><img src="/static/img/embird-text.svg" alt="embird" style="height:16px;width:auto;"></a>
             <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
                 <span class="navbar-toggler-icon"></span>
             </button>
             <div class="collapse navbar-collapse" id="navbarNav">
                 <ul class="navbar-nav">
-                    <li class="nav-item">
-                        <a class="nav-link" href="/">Latest</a>
+                    {% if topic_slug %}
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                            {% if topic %}{{ topic.name }}{% else %}Topic{% endif %}
+                        </a>
+                        <ul class="dropdown-menu">
+                            {% if topics %}
+                            {% for t in topics %}
+                            <li><a class="dropdown-item {% if topic_slug == t.slug %}active{% endif %}" href="/{{ t.slug }}/">{{ t.name }}</a></li>
+                            {% endfor %}
+                            <li><hr class="dropdown-divider"></li>
+                            {% endif %}
+                            <li><a class="dropdown-item" href="/topics">Manage Topics</a></li>
+                        </ul>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link" href="/news">All</a>
+                        <a class="nav-link" href="/{{ topic_slug }}/">Latest</a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link" href="/clusters">Cluster</a>
+                        <a class="nav-link" href="/{{ topic_slug }}/news">All</a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link" href="/umap">Visual</a>
+                        <a class="nav-link" href="/{{ topic_slug }}/clusters">Cluster</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/{{ topic_slug }}/umap">Visual</a>
                     </li>
                     {% if enable_url_management %}
                     <li class="nav-item">
-                        <a class="nav-link" href="/urls">Sources</a>
+                        <a class="nav-link" href="/{{ topic_slug }}/urls">Sources</a>
                     </li>
                     {% endif %}
                     {% if enable_preference_management %}
                     <li class="nav-item">
-                        <a class="nav-link" href="/preference-vectors">Preferences</a>
+                        <a class="nav-link" href="/{{ topic_slug }}/preference-vectors">Preferences</a>
                     </li>
                     {% endif %}
                     <li class="nav-item">
-                        <a class="nav-link" href="/search">Search</a>
+                        <a class="nav-link" href="/{{ topic_slug }}/search">Search</a>
                     </li>
+                    {% else %}
+                    <li class="nav-item">
+                        <a class="nav-link" href="/topics">Topics</a>
+                    </li>
+                    {% endif %}
                 </ul>
                 <ul class="navbar-nav ms-auto">
                     <li class="nav-item">
                         <button id="theme-toggle" class="btn btn-sm btn-outline-secondary" title="Toggle theme">
-                            <span id="theme-icon">🌙</span>
+                            <span id="theme-icon">&#127769;</span>
                         </button>
                     </li>
                 </ul>
@@ -340,7 +126,7 @@
         <div class="container">
             <div class="row">
                 <div class="col text-center">
-                    <span class="text-muted small">Latest News (Last 24 Hours) - Sorted by preference vector relevance</span>
+                    <span class="text-muted small">{% if topic %}{{ topic.name }} - {% endif %}Latest News (Last 24 Hours) - Sorted by preference vector relevance</span>
                 </div>
             </div>
             <div class="row mt-2">

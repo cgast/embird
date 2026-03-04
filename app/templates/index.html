@@ -10,7 +10,7 @@
             {% for scored in scored_items %}
             <div class="news-item-compact mb-3">
                 <div class="news-title">
-                    <a href="/news/{{ scored.item.id }}">{{ scored.item.title }}</a>
+                    <a href="/{{ topic_slug }}/news/{{ scored.item.id }}">{{ scored.item.title }}</a>
                 </div>
                 <div class="news-meta text-muted small">
                     {{ scored.item.first_seen_at.strftime('%Y-%m-%d %H:%M') }} - {{ scored.item.source_url }}
@@ -28,7 +28,7 @@
             </div>
             {% endfor %}
             <div class="text-end mt-4">
-                <a href="/news" class="btn btn-primary btn-sm">View All News</a>
+                <a href="/{{ topic_slug }}/news" class="btn btn-primary btn-sm">View All News</a>
             </div>
         {% else %}
             <p class="text-muted">No news items available from the last 24 hours. Add some URLs to crawl.</p>

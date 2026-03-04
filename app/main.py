@@ -11,6 +11,7 @@ from datetime import datetime
 from app.routes import web, api
 from app.services.crawler import start_crawler, stop_crawler
 from app.services.faiss_service import get_faiss_service
+from app.services.db import AsyncSessionLocal, ensure_default_topic
 from app.config import settings
 
 # Configure logging
@@ -62,17 +63,22 @@ async def add_process_time_header(request: Request, call_next):
 async def startup_event():
     """Initialize services on startup."""
     try:
+        # Ensure default topic exists
+        async with AsyncSessionLocal() as session:
+            await ensure_default_topic(session)
+        logger.info("Default topic ensured")
+
         # Initialize FAISS service
         faiss_service = get_faiss_service()
         logger.info("FAISS service initialized")
-        
+
         # Start crawler if this is the crawler service
         if os.environ.get("SERVICE_TYPE") == "crawler":
             # Create a new event loop for the crawler
             loop = asyncio.get_event_loop()
             loop.create_task(start_crawler())
             logger.info("Crawler service started")
-            
+
     except Exception as e:
         logger.error(f"Error during startup: {str(e)}")
         raise

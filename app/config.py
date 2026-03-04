@@ -9,6 +9,9 @@ class Settings(BaseSettings):
     ENABLE_URL_MANAGEMENT: bool = os.environ.get("ENABLE_URL_MANAGEMENT", "True").lower() in ("true", "1", "t")
     ENABLE_PREFERENCE_MANAGEMENT: bool = os.environ.get("ENABLE_PREFERENCE_MANAGEMENT", "True").lower() in ("true", "1", "t")
     ENABLE_PREFERENCE_VECTORS: bool = os.environ.get("ENABLE_PREFERENCE_VECTORS", "True").lower() in ("true", "1", "t")
+    ENABLE_TOPIC_MANAGEMENT: bool = os.environ.get("ENABLE_TOPIC_MANAGEMENT", "True").lower() in ("true", "1", "t")
+    DEFAULT_TOPIC_SLUG: str = os.environ.get("DEFAULT_TOPIC_SLUG", "default")
+    DEFAULT_TOPIC_NAME: str = os.environ.get("DEFAULT_TOPIC_NAME", "Default")
 
     # Authentication
     ADMIN_EMAIL: str = os.environ.get("ADMIN_EMAIL", "admin@admin.com")

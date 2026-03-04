@@ -43,28 +43,11 @@ STOP_WORDS = {
 
 
 def extract_cluster_keywords(articles: List[dict], num_keywords: int = 4) -> str:
-    """
-    Extract representative keywords from a cluster of articles.
-
-    Uses a simplified TF-IDF approach to find distinctive terms:
-    - Extracts words from titles and summaries
-    - Filters stop words and short terms
-    - Weights title words higher than summary words
-    - Returns top keywords joined with commas
-
-    Args:
-        articles: List of article dictionaries with 'title' and 'summary' fields
-        num_keywords: Number of keywords to extract (default 4)
-
-    Returns:
-        Comma-separated string of keywords (e.g., "AI, technology, OpenAI, regulation")
-    """
+    """Extract representative keywords from a cluster of articles."""
     if not articles:
         return "Uncategorized"
 
     word_scores = Counter()
-
-    # Weight for title vs summary words
     TITLE_WEIGHT = 3.0
     SUMMARY_WEIGHT = 1.0
 
@@ -72,12 +55,10 @@ def extract_cluster_keywords(articles: List[dict], num_keywords: int = 4) -> str
         title = article.get('title', '') or ''
         summary = article.get('summary', '') or ''
 
-        # Extract and score title words (higher weight)
         title_words = _tokenize(title)
         for word in title_words:
             word_scores[word] += TITLE_WEIGHT
 
-        # Extract and score summary words (lower weight)
         summary_words = _tokenize(summary)
         for word in summary_words:
             word_scores[word] += SUMMARY_WEIGHT
@@ -85,10 +66,8 @@ def extract_cluster_keywords(articles: List[dict], num_keywords: int = 4) -> str
     if not word_scores:
         return "Uncategorized"
 
-    # Get top keywords, avoiding duplicates and substrings
     top_words = []
     for word, _ in word_scores.most_common(num_keywords * 3):
-        # Skip if this word is a substring of an existing keyword or vice versa
         is_redundant = False
         for existing in top_words:
             if word in existing or existing in word:
@@ -96,7 +75,6 @@ def extract_cluster_keywords(articles: List[dict], num_keywords: int = 4) -> str
                 break
 
         if not is_redundant:
-            # Capitalize for display
             top_words.append(word.capitalize())
 
         if len(top_words) >= num_keywords:
@@ -109,24 +87,13 @@ def extract_cluster_keywords(articles: List[dict], num_keywords: int = 4) -> str
 
 
 def _tokenize(text: str) -> List[str]:
-    """
-    Tokenize text into words, filtering stop words and short terms.
-
-    Args:
-        text: Input text to tokenize
-
-    Returns:
-        List of filtered word tokens
-    """
+    """Tokenize text into words, filtering stop words and short terms."""
     if not text:
         return []
 
-    # Convert to lowercase and extract words
     text = text.lower()
-    # Match words with at least 2 characters (letters only)
     words = re.findall(r'\b[a-z]{3,}\b', text)
 
-    # Filter out stop words and very common terms
     filtered = [
         word for word in words
         if word not in STOP_WORDS and len(word) >= 3
@@ -153,17 +120,7 @@ def _enrich_article(news_item: NewsItem, similarity: float, cluster_id: int) -> 
 
 
 def _enrich_subcluster_tree(node: dict, news_items_map: dict, cluster_id: int) -> Optional[dict]:
-    """
-    Recursively enrich a subcluster tree node with full article data and keywords.
-
-    Args:
-        node: Tree node from faiss_service with 'items' and 'subclusters'
-        news_items_map: Map of news_id -> NewsItem
-        cluster_id: Parent cluster ID
-
-    Returns:
-        Enriched node with 'name', 'articles', and optional 'subclusters', or None if empty
-    """
+    """Recursively enrich a subcluster tree node with full article data and keywords."""
     enriched_items = []
     for item in node['items']:
         news_item = news_items_map.get(item['id'])
@@ -195,53 +152,31 @@ def _enrich_subcluster_tree(node: dict, news_items_map: dict, cluster_id: int) -
     return result
 
 
-async def generate_clusters(db: AsyncSession, hours: int, min_similarity: float) -> Dict[int, dict]:
-    """Generate news clusters using FAISS vector similarity.
-
-    Returns:
-        Dictionary mapping cluster_id to cluster data with structure:
-        {
-            cluster_id: {
-                "name": "keyword1, keyword2, keyword3",
-                "articles": [list of article dicts],
-                "subclusters": [  # Optional - only for large clusters
-                    {
-                        "name": "subcluster keywords",
-                        "articles": [list of article dicts]
-                    },
-                    ...
-                ]
-            }
-        }
-    """
+async def generate_clusters(db: AsyncSession, hours: int, min_similarity: float, topic_id: int = 1) -> Dict[int, dict]:
+    """Generate news clusters using FAISS vector similarity for a specific topic."""
     try:
-        # Get FAISS service
         faiss_service = get_faiss_service()
-
-        # Check if hierarchical clustering is enabled
         use_hierarchical = settings.SUBCLUSTER_ENABLED
 
         if use_hierarchical:
-            # Generate hierarchical clusters with recursive subclustering
             clusters = await faiss_service.get_hierarchical_clusters(
                 db,
                 hours,
                 min_similarity,
                 settings.SUBCLUSTER_MIN_SIZE,
                 settings.SUBCLUSTER_SIMILARITY,
-                settings.SUBCLUSTER_MAX_SIZE
+                settings.SUBCLUSTER_MAX_SIZE,
+                topic_id=topic_id
             )
         else:
-            # Generate flat clusters (legacy mode)
-            flat_clusters = await faiss_service.get_clusters(db, hours, min_similarity)
-            # Convert to hierarchical format for consistent processing
+            flat_clusters = await faiss_service.get_clusters(db, hours, min_similarity, topic_id=topic_id)
             clusters = {
                 cid: {'items': items, 'subclusters': None}
                 for cid, items in flat_clusters.items()
             }
 
         if not clusters:
-            logger.warning("No clusters found")
+            logger.warning(f"No clusters found for topic {topic_id}")
             return {}
 
         # Collect all news IDs for batch fetching
@@ -263,7 +198,6 @@ async def generate_clusters(db: AsyncSession, hours: int, min_similarity: float)
                 items = cluster_data['items']
                 subclusters_raw = cluster_data.get('subclusters')
 
-                # Enrich all items in the cluster
                 enriched_items = []
                 for item in items:
                     news_item = news_items_map.get(item['id'])
@@ -274,7 +208,6 @@ async def generate_clusters(db: AsyncSession, hours: int, min_similarity: float)
                     logger.warning(f"No news items found for cluster {cluster_id}")
                     continue
 
-                # Generate cluster name from all articles
                 cluster_name = extract_cluster_keywords(enriched_items)
 
                 cluster_result = {
@@ -282,7 +215,6 @@ async def generate_clusters(db: AsyncSession, hours: int, min_similarity: float)
                     "articles": enriched_items
                 }
 
-                # Process subclusters if present (recursive tree structure)
                 if subclusters_raw and len(subclusters_raw) > 1:
                     enriched_subclusters = []
                     for sub_node in subclusters_raw:
@@ -290,7 +222,6 @@ async def generate_clusters(db: AsyncSession, hours: int, min_similarity: float)
                         if enriched_sub:
                             enriched_subclusters.append(enriched_sub)
 
-                    # Only include subclusters if we have multiple meaningful ones
                     if len(enriched_subclusters) > 1:
                         cluster_result["subclusters"] = enriched_subclusters
 
@@ -300,20 +231,19 @@ async def generate_clusters(db: AsyncSession, hours: int, min_similarity: float)
                 logger.error(f"Error enriching cluster {cluster_id}: {str(e)}\n{traceback.format_exc()}")
                 continue
 
-        # Log statistics
         subclustered_count = sum(1 for c in enriched_clusters.values() if 'subclusters' in c)
-        logger.info(f"Generated {len(enriched_clusters)} enriched clusters ({subclustered_count} with subclusters)")
+        logger.info(f"Generated {len(enriched_clusters)} enriched clusters for topic {topic_id} ({subclustered_count} with subclusters)")
         return enriched_clusters
 
     except Exception as e:
         logger.error(f"Clustering error: {str(e)}\n{traceback.format_exc()}")
         raise
 
-async def generate_umap_visualization(db: AsyncSession, hours: int, min_similarity: float) -> List[dict]:
-    """Generate UMAP visualization data."""
+async def generate_umap_visualization(db: AsyncSession, hours: int, min_similarity: float, topic_id: int = 1) -> List[dict]:
+    """Generate UMAP visualization data for a specific topic."""
     try:
         # First generate clusters to get cluster assignments
-        clusters = await generate_clusters(db, hours, min_similarity)
+        clusters = await generate_clusters(db, hours, min_similarity, topic_id=topic_id)
 
         # Rank clusters by article count and keep only top 20
         TOP_N_CLUSTERS = 20
@@ -333,7 +263,6 @@ async def generate_umap_visualization(db: AsyncSession, hours: int, min_similari
         for cluster_id, cluster_data in clusters.items():
             if cluster_id not in top_clusters:
                 continue
-            # Handle both old format (list) and new format (dict with 'articles' key)
             if isinstance(cluster_data, dict):
                 articles = cluster_data.get('articles', cluster_data)
                 cluster_names[cluster_id] = cluster_data.get('name', f'Cluster {cluster_id}')
@@ -343,40 +272,42 @@ async def generate_umap_visualization(db: AsyncSession, hours: int, min_similari
             for item in articles:
                 item_to_cluster[item['id']] = cluster_id
 
-        # Get news items from the last n hours - use timezone-aware UTC time
+        # Get news items from the last n hours for this topic
         now = datetime.now(timezone.utc)
         time_filter = now - timedelta(hours=hours)
-        
-        # Get all news items with embeddings from the specified time period
+
         stmt = select(NewsItem).filter(
+            NewsItem.topic_id == topic_id,
             NewsItem.last_seen_at >= time_filter,
             NewsItem.embedding.is_not(None)
         ).order_by(NewsItem.last_seen_at.desc())
-        
+
         result = await db.execute(stmt)
         news_items = result.scalars().all()
-        
+
         if not news_items:
-            logger.warning("No news items found for UMAP visualization")
+            logger.warning(f"No news items found for UMAP visualization (topic_id={topic_id})")
             return []
 
-        # Get preference vectors from PostgreSQL
-        stmt = select(PreferenceVector).filter(PreferenceVector.embedding.is_not(None))
+        # Get preference vectors for this topic
+        stmt = select(PreferenceVector).filter(
+            PreferenceVector.topic_id == topic_id,
+            PreferenceVector.embedding.is_not(None)
+        )
         result = await db.execute(stmt)
         preference_vectors = result.scalars().all()
-        logger.info(f"Found {len(preference_vectors)} preference vectors in PostgreSQL")
-        
+        logger.info(f"Found {len(preference_vectors)} preference vectors for topic {topic_id}")
+
         # Process all embeddings together
         all_embeddings = []
         all_items = []
-        is_pref_vector = []  # Track which items are preference vectors
+        is_pref_vector = []
 
         # Add news item embeddings (only items in top clusters)
         for item in news_items:
             if item.id not in item_to_cluster:
                 continue
             try:
-                # Convert pgvector to numpy array
                 vector = np.array(item.embedding.tolist(), dtype=np.float32)
                 if vector.shape != (settings.VECTOR_DIMENSIONS,):
                     logger.error(f"Invalid vector shape for news item {item.id}: {vector.shape}")
@@ -392,7 +323,6 @@ async def generate_umap_visualization(db: AsyncSession, hours: int, min_similari
         for vector in preference_vectors:
             if vector.embedding is not None:
                 try:
-                    # Convert pgvector to numpy array
                     pref_vector = np.array(vector.embedding.tolist(), dtype=np.float32)
                     if pref_vector.shape != (settings.VECTOR_DIMENSIONS,):
                         logger.error(f"Invalid vector shape for preference vector {vector.id}: {pref_vector.shape}")
@@ -400,17 +330,15 @@ async def generate_umap_visualization(db: AsyncSession, hours: int, min_similari
                     all_embeddings.append(pref_vector)
                     all_items.append(vector)
                     is_pref_vector.append(True)
-                    logger.info(f"Added preference vector {vector.id} ({vector.title}) to UMAP input")
                 except Exception as e:
                     logger.error(f"Error processing embedding for preference vector {vector.id}: {str(e)}")
                     continue
 
         if not all_embeddings:
-            logger.warning("No valid embeddings found for UMAP visualization")
+            logger.warning(f"No valid embeddings found for UMAP visualization (topic_id={topic_id})")
             return []
 
         try:
-            # Create UMAP reducer
             reducer = umap.UMAP(
                 n_components=2,
                 random_state=42,
@@ -419,18 +347,14 @@ async def generate_umap_visualization(db: AsyncSession, hours: int, min_similari
                 n_neighbors=15
             )
 
-            # Convert to numpy array and get UMAP coordinates for all points together
             embeddings_array = np.array(all_embeddings)
             umap_result = reducer.fit_transform(embeddings_array)
-            
-            # Create visualization data
+
             visualization_data = []
-            
-            # Process all points
+
             for i, (item, is_pref) in enumerate(zip(all_items, is_pref_vector)):
                 try:
                     if is_pref:
-                        # Add preference vector
                         visualization_data.append({
                             "id": f"pref_{item.id}",
                             "title": item.title,
@@ -440,13 +364,11 @@ async def generate_umap_visualization(db: AsyncSession, hours: int, min_similari
                             "type": "preference_vector",
                             "opacity": 1.0
                         })
-                        logger.info(f"Added preference vector {item.id} to visualization data at ({float(umap_result[i][0])}, {float(umap_result[i][1])})")
                     else:
-                        # Add news item
                         last_seen = item.last_seen_at
                         if not last_seen.tzinfo:
                             last_seen = last_seen.replace(tzinfo=timezone.utc)
-                        
+
                         if last_seen >= now - timedelta(hours=1):
                             opacity = 0.8
                         elif last_seen <= now - timedelta(days=1):
@@ -454,7 +376,7 @@ async def generate_umap_visualization(db: AsyncSession, hours: int, min_similari
                         else:
                             hours_old = (now - last_seen).total_seconds() / 3600
                             opacity = 0.8 - (0.6 * (hours_old - 1) / 23)
-                        
+
                         cid = item_to_cluster.get(item.id)
                         visualization_data.append({
                             "id": item.id,
@@ -472,40 +394,40 @@ async def generate_umap_visualization(db: AsyncSession, hours: int, min_similari
                 except Exception as e:
                     logger.error(f"Error creating visualization data for item {i}: {str(e)}")
                     continue
-            
-            logger.info(f"Generated UMAP visualization with {len(visualization_data)} points")
+
+            logger.info(f"Generated UMAP visualization with {len(visualization_data)} points for topic {topic_id}")
             return visualization_data
-            
+
         except Exception as e:
             logger.error(f"UMAP reduction error: {str(e)}\n{traceback.format_exc()}")
             raise
-        
+
     except Exception as e:
         logger.error(f"UMAP visualization error: {str(e)}\n{traceback.format_exc()}")
         raise
 
-async def update_visualizations(db: AsyncSession):
-    """Update pre-generated visualizations using settings from config."""
+async def update_visualizations(db: AsyncSession, topic_id: int = 1):
+    """Update pre-generated visualizations for a specific topic."""
     try:
-        # Use settings from config
         hours = settings.VISUALIZATION_TIME_RANGE
         min_similarity = settings.VISUALIZATION_SIMILARITY
-        
+
         try:
             # Generate UMAP visualization
-            umap_data = await generate_umap_visualization(db, hours, min_similarity)
-            
-            # Check if UMAP visualization exists
+            umap_data = await generate_umap_visualization(db, hours, min_similarity, topic_id=topic_id)
+
+            # Check if UMAP visualization exists for this topic
             stmt = select(NewsUMAP).filter(
+                NewsUMAP.topic_id == topic_id,
                 NewsUMAP.hours == hours,
                 NewsUMAP.min_similarity == min_similarity
             )
             result = await db.execute(stmt)
             existing_umap = result.scalar_one_or_none()
-            
+
             if existing_umap:
-                # Update existing visualization
                 stmt = update(NewsUMAP).where(
+                    NewsUMAP.topic_id == topic_id,
                     NewsUMAP.hours == hours,
                     NewsUMAP.min_similarity == min_similarity
                 ).values(
@@ -514,28 +436,29 @@ async def update_visualizations(db: AsyncSession):
                 )
                 await db.execute(stmt)
             else:
-                # Create new visualization
                 umap_viz = NewsUMAP(
+                    topic_id=topic_id,
                     hours=hours,
                     min_similarity=min_similarity,
                     visualization=umap_data
                 )
                 db.add(umap_viz)
-            
+
             # Generate and store clusters
-            clusters_data = await generate_clusters(db, hours, min_similarity)
-            
-            # Check if clusters exist
+            clusters_data = await generate_clusters(db, hours, min_similarity, topic_id=topic_id)
+
+            # Check if clusters exist for this topic
             stmt = select(NewsClusters).filter(
+                NewsClusters.topic_id == topic_id,
                 NewsClusters.hours == hours,
                 NewsClusters.min_similarity == min_similarity
             )
             result = await db.execute(stmt)
             existing_clusters = result.scalar_one_or_none()
-            
+
             if existing_clusters:
-                # Update existing clusters
                 stmt = update(NewsClusters).where(
+                    NewsClusters.topic_id == topic_id,
                     NewsClusters.hours == hours,
                     NewsClusters.min_similarity == min_similarity
                 ).values(
@@ -544,21 +467,21 @@ async def update_visualizations(db: AsyncSession):
                 )
                 await db.execute(stmt)
             else:
-                # Create new clusters
                 clusters = NewsClusters(
+                    topic_id=topic_id,
                     hours=hours,
                     min_similarity=min_similarity,
                     clusters=clusters_data
                 )
                 db.add(clusters)
-                
+
         except Exception as e:
-            logger.error(f"Error updating visualizations for {hours}h and {min_similarity} similarity: {str(e)}\n{traceback.format_exc()}")
+            logger.error(f"Error updating visualizations for topic {topic_id}, {hours}h and {min_similarity} similarity: {str(e)}\n{traceback.format_exc()}")
             raise
-        
+
         await db.commit()
-        logger.info("Successfully updated all visualizations")
-        
+        logger.info(f"Successfully updated all visualizations for topic {topic_id}")
+
     except Exception as e:
         logger.error(f"Error updating visualizations: {str(e)}\n{traceback.format_exc()}")
         await db.rollback()

@@ -7,13 +7,13 @@ class URLBase(BaseModel):
     """Base model for URL."""
     url: str
     type: str  # 'rss' or 'homepage'
-    
+
     @validator('type')
     def validate_type(cls, v):
         if v not in ['rss', 'homepage']:
             raise ValueError('Type must be either "rss" or "homepage"')
         return v
-    
+
     @validator('url')
     def validate_url(cls, v):
         if not v.startswith(('http://', 'https://')):
@@ -27,126 +27,137 @@ class URLCreate(URLBase):
 class URL(URLBase):
     """Model for a URL retrieved from the database."""
     id: int
+    topic_id: int = 1
     created_at: datetime
     updated_at: datetime
     last_crawled_at: Optional[datetime] = None
-    
+
     class Config:
         from_attributes = True
 
 
 class URLDatabase:
     """SQLite database operations for URL management."""
-    
+
     def __init__(self, db_path: str):
         self.db_path = db_path
         self._create_tables()
-    
+
     def _create_tables(self):
         """Create tables if they don't exist."""
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
-        
+
         cursor.execute('''
         CREATE TABLE IF NOT EXISTS urls (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            url TEXT NOT NULL UNIQUE,
+            url TEXT NOT NULL,
             type TEXT NOT NULL,
+            topic_id INTEGER NOT NULL DEFAULT 1,
             created_at TEXT NOT NULL,
             updated_at TEXT NOT NULL,
             last_crawled_at TEXT
         )
         ''')
-        
+
+        # Migrate: add topic_id column if missing (existing databases)
+        cursor.execute("PRAGMA table_info(urls)")
+        columns = [col[1] for col in cursor.fetchall()]
+        if 'topic_id' not in columns:
+            cursor.execute('ALTER TABLE urls ADD COLUMN topic_id INTEGER NOT NULL DEFAULT 1')
+
+        # Create unique index on (topic_id, url) if not exists
+        cursor.execute('''
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_urls_topic_url ON urls(topic_id, url)
+        ''')
+
         conn.commit()
         conn.close()
-    
-    def add_url(self, url_data: URLCreate) -> URL:
+
+    def _row_to_url(self, row) -> URL:
+        """Convert a database row to a URL model."""
+        return URL(
+            id=row['id'],
+            url=row['url'],
+            type=row['type'],
+            topic_id=row['topic_id'] if 'topic_id' in row.keys() else 1,
+            created_at=datetime.fromisoformat(row['created_at']),
+            updated_at=datetime.fromisoformat(row['updated_at']),
+            last_crawled_at=datetime.fromisoformat(row['last_crawled_at']) if row['last_crawled_at'] else None
+        )
+
+    def add_url(self, url_data: URLCreate, topic_id: int = 1) -> URL:
         """Add a new URL to the database."""
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
-        
+
         # Use timezone-aware UTC time
         now = datetime.now(timezone.utc).isoformat()
-        
+
         cursor.execute(
             '''
-            INSERT INTO urls (url, type, created_at, updated_at)
-            VALUES (?, ?, ?, ?)
+            INSERT INTO urls (url, type, topic_id, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?)
             ''',
-            (url_data.url, url_data.type, now, now)
+            (url_data.url, url_data.type, topic_id, now, now)
         )
-        
+
         url_id = cursor.lastrowid
         conn.commit()
         conn.close()
-        
+
         return URL(
             id=url_id,
             url=url_data.url,
             type=url_data.type,
+            topic_id=topic_id,
             created_at=datetime.fromisoformat(now),
             updated_at=datetime.fromisoformat(now),
             last_crawled_at=None
         )
-    
-    def get_all_urls(self) -> List[URL]:
-        """Get all URLs from the database."""
+
+    def get_all_urls(self, topic_id: Optional[int] = None) -> List[URL]:
+        """Get all URLs from the database, optionally filtered by topic."""
         conn = sqlite3.connect(self.db_path)
         conn.row_factory = sqlite3.Row
         cursor = conn.cursor()
-        
-        cursor.execute('SELECT * FROM urls ORDER BY id DESC')
+
+        if topic_id is not None:
+            cursor.execute('SELECT * FROM urls WHERE topic_id = ? ORDER BY id DESC', (topic_id,))
+        else:
+            cursor.execute('SELECT * FROM urls ORDER BY id DESC')
         rows = cursor.fetchall()
-        
-        urls = []
-        for row in rows:
-            url = URL(
-                id=row['id'],
-                url=row['url'],
-                type=row['type'],
-                created_at=datetime.fromisoformat(row['created_at']),
-                updated_at=datetime.fromisoformat(row['updated_at']),
-                last_crawled_at=datetime.fromisoformat(row['last_crawled_at']) if row['last_crawled_at'] else None
-            )
-            urls.append(url)
-        
+
+        urls = [self._row_to_url(row) for row in rows]
+
         conn.close()
         return urls
-    
+
     def get_url_by_id(self, url_id: int) -> Optional[URL]:
         """Get a URL by its ID."""
         conn = sqlite3.connect(self.db_path)
         conn.row_factory = sqlite3.Row
         cursor = conn.cursor()
-        
+
         cursor.execute('SELECT * FROM urls WHERE id = ?', (url_id,))
         row = cursor.fetchone()
-        
+
         if not row:
             conn.close()
             return None
-        
-        url = URL(
-            id=row['id'],
-            url=row['url'],
-            type=row['type'],
-            created_at=datetime.fromisoformat(row['created_at']),
-            updated_at=datetime.fromisoformat(row['updated_at']),
-            last_crawled_at=datetime.fromisoformat(row['last_crawled_at']) if row['last_crawled_at'] else None
-        )
-        
+
+        url = self._row_to_url(row)
         conn.close()
         return url
-    
+
     def update_url_crawl_time(self, url_id: int) -> bool:
         """Update the last crawled time for a URL."""
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
-        
+
         # Use timezone-aware UTC time
         now = datetime.now(timezone.utc).isoformat()
-        
+
         cursor.execute(
             '''
             UPDATE urls
@@ -155,46 +166,39 @@ class URLDatabase:
             ''',
             (now, now, url_id)
         )
-        
+
         rows_affected = cursor.rowcount
         conn.commit()
         conn.close()
-        
+
         return rows_affected > 0
-    
+
     def delete_url(self, url_id: int) -> bool:
         """Delete a URL by its ID."""
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
-        
+
         cursor.execute('DELETE FROM urls WHERE id = ?', (url_id,))
-        
+
         rows_affected = cursor.rowcount
         conn.commit()
         conn.close()
-        
+
         return rows_affected > 0
-    
-    def get_urls_to_crawl(self) -> List[URL]:
-        """Get all URLs that need to be crawled."""
+
+    def get_urls_to_crawl(self, topic_id: Optional[int] = None) -> List[URL]:
+        """Get all URLs that need to be crawled, optionally filtered by topic."""
         conn = sqlite3.connect(self.db_path)
         conn.row_factory = sqlite3.Row
         cursor = conn.cursor()
-        
-        cursor.execute('SELECT * FROM urls')
+
+        if topic_id is not None:
+            cursor.execute('SELECT * FROM urls WHERE topic_id = ?', (topic_id,))
+        else:
+            cursor.execute('SELECT * FROM urls')
         rows = cursor.fetchall()
-        
-        urls = []
-        for row in rows:
-            url = URL(
-                id=row['id'],
-                url=row['url'],
-                type=row['type'],
-                created_at=datetime.fromisoformat(row['created_at']),
-                updated_at=datetime.fromisoformat(row['updated_at']),
-                last_crawled_at=datetime.fromisoformat(row['last_crawled_at']) if row['last_crawled_at'] else None
-            )
-            urls.append(url)
-        
+
+        urls = [self._row_to_url(row) for row in rows]
+
         conn.close()
         return urls
