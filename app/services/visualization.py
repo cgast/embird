@@ -8,6 +8,7 @@ from collections import Counter
 import umap
 import numpy as np
 from sqlalchemy import select, text, update, func
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.news import NewsItem, NewsClusters, NewsUMAP
@@ -416,64 +417,34 @@ async def update_visualizations(db: AsyncSession, topic_id: int = 1):
             # Generate UMAP visualization
             umap_data = await generate_umap_visualization(db, hours, min_similarity, topic_id=topic_id)
 
-            # Check if UMAP visualization exists for this topic
-            stmt = select(NewsUMAP).filter(
-                NewsUMAP.topic_id == topic_id,
-                NewsUMAP.hours == hours,
-                NewsUMAP.min_similarity == min_similarity
+            # Upsert UMAP visualization for this topic
+            umap_stmt = pg_insert(NewsUMAP).values(
+                topic_id=topic_id,
+                hours=hours,
+                min_similarity=min_similarity,
+                visualization=umap_data,
+                created_at=func.now()
+            ).on_conflict_do_update(
+                constraint='uix_umap_topic_hours_similarity',
+                set_=dict(visualization=umap_data, created_at=func.now())
             )
-            result = await db.execute(stmt)
-            existing_umap = result.scalar_one_or_none()
-
-            if existing_umap:
-                stmt = update(NewsUMAP).where(
-                    NewsUMAP.topic_id == topic_id,
-                    NewsUMAP.hours == hours,
-                    NewsUMAP.min_similarity == min_similarity
-                ).values(
-                    visualization=umap_data,
-                    created_at=func.now()
-                )
-                await db.execute(stmt)
-            else:
-                umap_viz = NewsUMAP(
-                    topic_id=topic_id,
-                    hours=hours,
-                    min_similarity=min_similarity,
-                    visualization=umap_data
-                )
-                db.add(umap_viz)
+            await db.execute(umap_stmt)
 
             # Generate and store clusters
             clusters_data = await generate_clusters(db, hours, min_similarity, topic_id=topic_id)
 
-            # Check if clusters exist for this topic
-            stmt = select(NewsClusters).filter(
-                NewsClusters.topic_id == topic_id,
-                NewsClusters.hours == hours,
-                NewsClusters.min_similarity == min_similarity
+            # Upsert clusters for this topic
+            clusters_stmt = pg_insert(NewsClusters).values(
+                topic_id=topic_id,
+                hours=hours,
+                min_similarity=min_similarity,
+                clusters=clusters_data,
+                created_at=func.now()
+            ).on_conflict_do_update(
+                constraint='uix_topic_hours_similarity',
+                set_=dict(clusters=clusters_data, created_at=func.now())
             )
-            result = await db.execute(stmt)
-            existing_clusters = result.scalar_one_or_none()
-
-            if existing_clusters:
-                stmt = update(NewsClusters).where(
-                    NewsClusters.topic_id == topic_id,
-                    NewsClusters.hours == hours,
-                    NewsClusters.min_similarity == min_similarity
-                ).values(
-                    clusters=clusters_data,
-                    created_at=func.now()
-                )
-                await db.execute(stmt)
-            else:
-                clusters = NewsClusters(
-                    topic_id=topic_id,
-                    hours=hours,
-                    min_similarity=min_similarity,
-                    clusters=clusters_data
-                )
-                db.add(clusters)
+            await db.execute(clusters_stmt)
 
         except Exception as e:
             logger.error(f"Error updating visualizations for topic {topic_id}, {hours}h and {min_similarity} similarity: {str(e)}\n{traceback.format_exc()}")
