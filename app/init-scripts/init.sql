@@ -46,6 +46,17 @@ CREATE TABLE IF NOT EXISTS topics (
     updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
 );
 
+-- Migration: add language column if it doesn't exist
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name='topics' AND column_name='language'
+    ) THEN
+        ALTER TABLE topics ADD COLUMN language VARCHAR NOT NULL DEFAULT 'en';
+    END IF;
+END $$;
+
 -- Insert default topic if it doesn't exist
 INSERT INTO topics (name, slug, description)
 VALUES ('Default', 'default', 'Default topic')

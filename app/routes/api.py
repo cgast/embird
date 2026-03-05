@@ -26,6 +26,7 @@ from app.services.db import get_db, url_db, get_all_topics
 from app.services.embedding import get_embedding_service, EmbeddingService
 from app.services.visualization import generate_clusters, generate_umap_visualization
 from app.services.faiss_service import get_faiss_service
+from app.services.stop_words import SUPPORTED_LANGUAGES
 from app.config import settings
 
 logger = logging.getLogger(__name__)
@@ -60,6 +61,11 @@ async def login(credentials: LoginRequest):
 async def health_check():
     """Health check endpoint for container orchestration."""
     return {"status": "healthy"}
+
+@router.get("/languages")
+async def list_languages():
+    """List supported languages for topics."""
+    return [{"code": code, "name": name} for code, name in SUPPORTED_LANGUAGES.items()]
 
 
 # ---- Topic Endpoints ----
@@ -99,6 +105,8 @@ async def update_topic(topic_slug: str, topic_data: TopicUpdate, db: AsyncSessio
         topic.name = topic_data.name
     if topic_data.description is not None:
         topic.description = topic_data.description
+    if topic_data.language is not None:
+        topic.language = topic_data.language
     await db.commit()
     await db.refresh(topic)
     return topic
@@ -327,7 +335,7 @@ async def get_news_clusters(topic_slug: str, db: AsyncSession = Depends(get_db))
         if clusters:
             cluster_data = clusters.clusters
         else:
-            cluster_data = await generate_clusters(db, settings.VISUALIZATION_TIME_RANGE, settings.VISUALIZATION_SIMILARITY, topic_id=topic.id)
+            cluster_data = await generate_clusters(db, settings.VISUALIZATION_TIME_RANGE, settings.VISUALIZATION_SIMILARITY, topic_id=topic.id, language=topic.language or 'en')
 
             stmt = pg_insert(NewsClusters).values(
                 topic_id=topic.id,
@@ -436,7 +444,7 @@ async def get_news_umap(topic_slug: str, db: AsyncSession = Depends(get_db)):
         if umap_data:
             return umap_data.visualization
 
-        return await generate_umap_visualization(db, settings.VISUALIZATION_TIME_RANGE, settings.VISUALIZATION_SIMILARITY, topic_id=topic.id)
+        return await generate_umap_visualization(db, settings.VISUALIZATION_TIME_RANGE, settings.VISUALIZATION_SIMILARITY, topic_id=topic.id, language=topic.language or 'en')
 
     except Exception as e:
         logging.error(f"UMAP visualization error: {str(e)}")
@@ -709,8 +717,8 @@ async def create_preference_vector(
         await db.commit()
         await db.refresh(vector)
 
-        await generate_clusters(db, settings.VISUALIZATION_TIME_RANGE, settings.VISUALIZATION_SIMILARITY, topic_id=topic.id)
-        await generate_umap_visualization(db, settings.VISUALIZATION_TIME_RANGE, settings.VISUALIZATION_SIMILARITY, topic_id=topic.id)
+        await generate_clusters(db, settings.VISUALIZATION_TIME_RANGE, settings.VISUALIZATION_SIMILARITY, topic_id=topic.id, language=topic.language or 'en')
+        await generate_umap_visualization(db, settings.VISUALIZATION_TIME_RANGE, settings.VISUALIZATION_SIMILARITY, topic_id=topic.id, language=topic.language or 'en')
 
         return vector
 
@@ -752,8 +760,8 @@ async def update_preference_vector(
         await db.commit()
         await db.refresh(vector)
 
-        await generate_clusters(db, settings.VISUALIZATION_TIME_RANGE, settings.VISUALIZATION_SIMILARITY, topic_id=topic.id)
-        await generate_umap_visualization(db, settings.VISUALIZATION_TIME_RANGE, settings.VISUALIZATION_SIMILARITY, topic_id=topic.id)
+        await generate_clusters(db, settings.VISUALIZATION_TIME_RANGE, settings.VISUALIZATION_SIMILARITY, topic_id=topic.id, language=topic.language or 'en')
+        await generate_umap_visualization(db, settings.VISUALIZATION_TIME_RANGE, settings.VISUALIZATION_SIMILARITY, topic_id=topic.id, language=topic.language or 'en')
 
         return vector
 
@@ -780,7 +788,7 @@ async def delete_preference_vector(topic_slug: str, vector_id: int, db: AsyncSes
     await db.delete(vector)
     await db.commit()
 
-    await generate_clusters(db, settings.VISUALIZATION_TIME_RANGE, settings.VISUALIZATION_SIMILARITY, topic_id=topic.id)
-    await generate_umap_visualization(db, settings.VISUALIZATION_TIME_RANGE, settings.VISUALIZATION_SIMILARITY, topic_id=topic.id)
+    await generate_clusters(db, settings.VISUALIZATION_TIME_RANGE, settings.VISUALIZATION_SIMILARITY, topic_id=topic.id, language=topic.language or 'en')
+    await generate_umap_visualization(db, settings.VISUALIZATION_TIME_RANGE, settings.VISUALIZATION_SIMILARITY, topic_id=topic.id, language=topic.language or 'en')
 
     return True
