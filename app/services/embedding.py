@@ -137,7 +137,7 @@ class EmbeddingService:
                 for topic in topics:
                     try:
                         async with AsyncSessionLocal() as session:
-                            await update_visualizations(session, topic_id=topic.id)
+                            await update_visualizations(session, topic_id=topic.id, language=topic.language or 'en')
                     except Exception as e:
                         logger.error(f"Error updating visualizations for topic {topic.id}: {str(e)}")
 

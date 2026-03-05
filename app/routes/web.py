@@ -419,7 +419,8 @@ async def view_clusters(
                 db,
                 hours=settings.VISUALIZATION_TIME_RANGE,
                 min_similarity=settings.VISUALIZATION_SIMILARITY,
-                topic_id=topic.id
+                topic_id=topic.id,
+                language=topic.language or 'en'
             )
         else:
             clusters_data = clusters.clusters
@@ -518,7 +519,8 @@ async def view_umap(
                 db,
                 hours=settings.VISUALIZATION_TIME_RANGE,
                 min_similarity=settings.VISUALIZATION_SIMILARITY,
-                topic_id=topic.id
+                topic_id=topic.id,
+                language=topic.language or 'en'
             )
         else:
             visualization_data = umap_data.visualization
@@ -591,7 +593,7 @@ async def create_preference_vector(
         db.add(vector)
         await db.commit()
 
-        await update_visualizations(db, topic_id=topic.id)
+        await update_visualizations(db, topic_id=topic.id, language=topic.language or 'en')
 
         return RedirectResponse(url=f"/{topic_slug}/preference-vectors", status_code=303)
     except Exception as e:
@@ -634,7 +636,7 @@ async def update_preference_vector(
         vector.updated_at = func.now()
 
         await db.commit()
-        await update_visualizations(db, topic_id=topic.id)
+        await update_visualizations(db, topic_id=topic.id, language=topic.language or 'en')
 
         return RedirectResponse(url=f"/{topic_slug}/preference-vectors", status_code=303)
     except Exception as e:

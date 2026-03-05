@@ -6,6 +6,7 @@ from pydantic import BaseModel, validator
 from sqlalchemy import Column, Integer, String, Text, DateTime, func
 
 from app.models.news import Base
+from app.services.stop_words import SUPPORTED_LANGUAGES, DEFAULT_LANGUAGE
 
 
 class Topic(Base):
@@ -16,6 +17,7 @@ class Topic(Base):
     name = Column(Text, nullable=False)
     slug = Column(String, nullable=False, unique=True, index=True)
     description = Column(Text, nullable=True)
+    language = Column(String, nullable=False, server_default=DEFAULT_LANGUAGE)
     created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
     updated_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now())
 
@@ -30,6 +32,7 @@ class TopicBase(BaseModel):
     name: str
     slug: str
     description: Optional[str] = None
+    language: str = DEFAULT_LANGUAGE
 
     @validator('slug')
     def validate_slug(cls, v):
@@ -46,6 +49,12 @@ class TopicBase(BaseModel):
             raise ValueError('Name cannot be empty')
         return v.strip()
 
+    @validator('language')
+    def validate_language(cls, v):
+        if v not in SUPPORTED_LANGUAGES:
+            raise ValueError(f'Language must be one of: {", ".join(SUPPORTED_LANGUAGES.keys())}')
+        return v
+
 
 class TopicCreate(TopicBase):
     """Model for creating a new topic."""
@@ -53,15 +62,22 @@ class TopicCreate(TopicBase):
 
 
 class TopicUpdate(BaseModel):
-    """Model for updating a topic's name and description."""
+    """Model for updating a topic's name, description, and language."""
     name: Optional[str] = None
     description: Optional[str] = None
+    language: Optional[str] = None
 
     @validator('name')
     def validate_name(cls, v):
         if v is not None and not v.strip():
             raise ValueError('Name cannot be empty')
         return v.strip() if v else v
+
+    @validator('language')
+    def validate_language(cls, v):
+        if v is not None and v not in SUPPORTED_LANGUAGES:
+            raise ValueError(f'Language must be one of: {", ".join(SUPPORTED_LANGUAGES.keys())}')
+        return v
 
 
 class TopicResponse(TopicBase):

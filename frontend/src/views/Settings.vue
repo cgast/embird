@@ -27,7 +27,10 @@ const topicLoading = ref(true)
 const topicError = ref(null)
 const topicSuccess = ref(null)
 const editingTopic = ref(false)
-const topicForm = ref({ name: '', description: '' })
+const topicForm = ref({ name: '', description: '', language: 'en' })
+
+// Languages state
+const languages = ref([])
 
 // Sources state
 const sources = ref([])
@@ -163,8 +166,19 @@ const fetchTopic = async () => {
   }
 }
 
+const fetchLanguages = async () => {
+  try {
+    const response = await fetch('/api/languages')
+    if (response.ok) {
+      languages.value = await response.json()
+    }
+  } catch (err) {
+    // Languages will default to empty, language select won't show options
+  }
+}
+
 const startEditTopic = () => {
-  topicForm.value = { name: topic.value.name, description: topic.value.description || '' }
+  topicForm.value = { name: topic.value.name, description: topic.value.description || '', language: topic.value.language || 'en' }
   editingTopic.value = true
   topicSuccess.value = null
 }
@@ -266,6 +280,7 @@ onMounted(() => {
   fetchVectors()
   fetchSources()
   fetchTopic()
+  fetchLanguages()
 })
 </script>
 
@@ -498,6 +513,10 @@ onMounted(() => {
             <p class="topic-value text-muted">{{ topic.slug }}</p>
           </div>
           <div class="topic-detail">
+            <label class="topic-label">Language</label>
+            <p class="topic-value">{{ languages.find(l => l.code === topic.language)?.name || topic.language || 'English' }}</p>
+          </div>
+          <div class="topic-detail">
             <label class="topic-label">Description</label>
             <p class="topic-value">{{ topic.description || 'No description' }}</p>
           </div>
@@ -513,6 +532,14 @@ onMounted(() => {
             <div class="form-group mb-3">
               <label>Name</label>
               <input v-model="topicForm.name" type="text" placeholder="Topic name" required />
+            </div>
+            <div class="form-group mb-3">
+              <label>Language</label>
+              <select v-model="topicForm.language" class="form-select">
+                <option v-for="lang in languages" :key="lang.code" :value="lang.code">
+                  {{ lang.name }}
+                </option>
+              </select>
             </div>
             <div class="form-group mb-3">
               <label>Description</label>

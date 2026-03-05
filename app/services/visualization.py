@@ -14,36 +14,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.news import NewsItem, NewsClusters, NewsUMAP
 from app.models.preference_vector import PreferenceVector
 from app.services.faiss_service import get_faiss_service
+from app.services.stop_words import get_stop_words, DEFAULT_LANGUAGE
 from app.config import settings
 
 logger = logging.getLogger(__name__)
 
-# Common stop words to filter out from keywords
-STOP_WORDS = {
-    'a', 'an', 'and', 'are', 'as', 'at', 'be', 'by', 'for', 'from', 'has', 'he',
-    'in', 'is', 'it', 'its', 'of', 'on', 'that', 'the', 'to', 'was', 'were',
-    'will', 'with', 'the', 'this', 'but', 'they', 'have', 'had', 'what', 'when',
-    'where', 'who', 'which', 'why', 'how', 'all', 'each', 'every', 'both', 'few',
-    'more', 'most', 'other', 'some', 'such', 'no', 'nor', 'not', 'only', 'own',
-    'same', 'so', 'than', 'too', 'very', 'just', 'can', 'could', 'may', 'might',
-    'must', 'shall', 'should', 'would', 'now', 'also', 'into', 'over', 'after',
-    'before', 'between', 'under', 'again', 'further', 'then', 'once', 'here',
-    'there', 'when', 'where', 'why', 'how', 'any', 'been', 'being', 'do', 'does',
-    'did', 'doing', 'about', 'against', 'up', 'down', 'out', 'off', 'through',
-    'during', 'while', 'above', 'below', 'their', 'them', 'these', 'those', 'his',
-    'her', 'him', 'she', 'he', 'we', 'you', 'your', 'our', 'my', 'me', 'i', 'us',
-    'says', 'said', 'new', 'news', 'report', 'reports', 'according', 'like',
-    'get', 'gets', 'got', 'make', 'makes', 'made', 'one', 'two', 'three', 'first',
-    'year', 'years', 'day', 'days', 'week', 'weeks', 'month', 'months', 'time',
-    'way', 'even', 'well', 'back', 'much', 'still', 'many', 'last', 'take', 'see',
-    'come', 'use', 'used', 'using', 'go', 'know', 'need', 'want', 'look', 'think',
-    'right', 'old', 'going', 'good', 'great', 'big', 'long', 'little', 'own', 'set',
-    'put', 'end', 'another', 'best', 'worst', 'top', 'high', 'low', 'part', 'full',
-    'early', 'late', 'say', 'latest', 'breaking', 'live', 'update', 'updates'
-}
 
-
-def extract_cluster_keywords(articles: List[dict], num_keywords: int = 4) -> str:
+def extract_cluster_keywords(articles: List[dict], num_keywords: int = 4, language: str = DEFAULT_LANGUAGE) -> str:
     """Extract representative keywords from a cluster of articles."""
     if not articles:
         return "Uncategorized"
@@ -56,11 +33,11 @@ def extract_cluster_keywords(articles: List[dict], num_keywords: int = 4) -> str
         title = article.get('title', '') or ''
         summary = article.get('summary', '') or ''
 
-        title_words = _tokenize(title)
+        title_words = _tokenize(title, language)
         for word in title_words:
             word_scores[word] += TITLE_WEIGHT
 
-        summary_words = _tokenize(summary)
+        summary_words = _tokenize(summary, language)
         for word in summary_words:
             word_scores[word] += SUMMARY_WEIGHT
 
@@ -87,17 +64,18 @@ def extract_cluster_keywords(articles: List[dict], num_keywords: int = 4) -> str
     return ", ".join(top_words)
 
 
-def _tokenize(text: str) -> List[str]:
+def _tokenize(text: str, language: str = DEFAULT_LANGUAGE) -> List[str]:
     """Tokenize text into words, filtering stop words and short terms."""
     if not text:
         return []
 
+    stop_words = get_stop_words(language)
     text = text.lower()
-    words = re.findall(r'\b[a-z]{3,}\b', text)
+    words = re.findall(r'\b[a-zäöüß]{3,}\b', text)
 
     filtered = [
         word for word in words
-        if word not in STOP_WORDS and len(word) >= 3
+        if word not in stop_words and len(word) >= 3
     ]
 
     return filtered
@@ -120,7 +98,7 @@ def _enrich_article(news_item: NewsItem, similarity: float, cluster_id: int) -> 
     }
 
 
-def _enrich_subcluster_tree(node: dict, news_items_map: dict, cluster_id: int) -> Optional[dict]:
+def _enrich_subcluster_tree(node: dict, news_items_map: dict, cluster_id: int, language: str = DEFAULT_LANGUAGE) -> Optional[dict]:
     """Recursively enrich a subcluster tree node with full article data and keywords."""
     enriched_items = []
     for item in node['items']:
@@ -132,14 +110,14 @@ def _enrich_subcluster_tree(node: dict, news_items_map: dict, cluster_id: int) -
         return None
 
     result = {
-        'name': extract_cluster_keywords(enriched_items, num_keywords=3),
+        'name': extract_cluster_keywords(enriched_items, num_keywords=3, language=language),
         'articles': enriched_items,
     }
 
     if node.get('subclusters') and len(node['subclusters']) > 1:
         enriched_subs = []
         for sub_node in node['subclusters']:
-            enriched_sub = _enrich_subcluster_tree(sub_node, news_items_map, cluster_id)
+            enriched_sub = _enrich_subcluster_tree(sub_node, news_items_map, cluster_id, language=language)
             if enriched_sub:
                 enriched_subs.append(enriched_sub)
 
@@ -153,7 +131,7 @@ def _enrich_subcluster_tree(node: dict, news_items_map: dict, cluster_id: int) -
     return result
 
 
-async def generate_clusters(db: AsyncSession, hours: int, min_similarity: float, topic_id: int = 1) -> Dict[int, dict]:
+async def generate_clusters(db: AsyncSession, hours: int, min_similarity: float, topic_id: int = 1, language: str = DEFAULT_LANGUAGE) -> Dict[int, dict]:
     """Generate news clusters using FAISS vector similarity for a specific topic."""
     try:
         faiss_service = get_faiss_service()
@@ -209,7 +187,7 @@ async def generate_clusters(db: AsyncSession, hours: int, min_similarity: float,
                     logger.warning(f"No news items found for cluster {cluster_id}")
                     continue
 
-                cluster_name = extract_cluster_keywords(enriched_items)
+                cluster_name = extract_cluster_keywords(enriched_items, language=language)
 
                 cluster_result = {
                     "name": cluster_name,
@@ -219,7 +197,7 @@ async def generate_clusters(db: AsyncSession, hours: int, min_similarity: float,
                 if subclusters_raw and len(subclusters_raw) > 1:
                     enriched_subclusters = []
                     for sub_node in subclusters_raw:
-                        enriched_sub = _enrich_subcluster_tree(sub_node, news_items_map, cluster_id)
+                        enriched_sub = _enrich_subcluster_tree(sub_node, news_items_map, cluster_id, language=language)
                         if enriched_sub:
                             enriched_subclusters.append(enriched_sub)
 
@@ -240,11 +218,11 @@ async def generate_clusters(db: AsyncSession, hours: int, min_similarity: float,
         logger.error(f"Clustering error: {str(e)}\n{traceback.format_exc()}")
         raise
 
-async def generate_umap_visualization(db: AsyncSession, hours: int, min_similarity: float, topic_id: int = 1) -> List[dict]:
+async def generate_umap_visualization(db: AsyncSession, hours: int, min_similarity: float, topic_id: int = 1, language: str = DEFAULT_LANGUAGE) -> List[dict]:
     """Generate UMAP visualization data for a specific topic."""
     try:
         # First generate clusters to get cluster assignments
-        clusters = await generate_clusters(db, hours, min_similarity, topic_id=topic_id)
+        clusters = await generate_clusters(db, hours, min_similarity, topic_id=topic_id, language=language)
 
         # Rank clusters by article count and keep only top 20
         TOP_N_CLUSTERS = 20
@@ -407,7 +385,7 @@ async def generate_umap_visualization(db: AsyncSession, hours: int, min_similari
         logger.error(f"UMAP visualization error: {str(e)}\n{traceback.format_exc()}")
         raise
 
-async def update_visualizations(db: AsyncSession, topic_id: int = 1):
+async def update_visualizations(db: AsyncSession, topic_id: int = 1, language: str = DEFAULT_LANGUAGE):
     """Update pre-generated visualizations for a specific topic."""
     try:
         hours = settings.VISUALIZATION_TIME_RANGE
@@ -415,7 +393,7 @@ async def update_visualizations(db: AsyncSession, topic_id: int = 1):
 
         try:
             # Generate UMAP visualization
-            umap_data = await generate_umap_visualization(db, hours, min_similarity, topic_id=topic_id)
+            umap_data = await generate_umap_visualization(db, hours, min_similarity, topic_id=topic_id, language=language)
 
             # Upsert UMAP visualization for this topic
             umap_stmt = pg_insert(NewsUMAP).values(
@@ -431,7 +409,7 @@ async def update_visualizations(db: AsyncSession, topic_id: int = 1):
             await db.execute(umap_stmt)
 
             # Generate and store clusters
-            clusters_data = await generate_clusters(db, hours, min_similarity, topic_id=topic_id)
+            clusters_data = await generate_clusters(db, hours, min_similarity, topic_id=topic_id, language=language)
 
             # Upsert clusters for this topic
             clusters_stmt = pg_insert(NewsClusters).values(
