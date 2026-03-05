@@ -75,6 +75,44 @@ async def init_db():
                 FOREIGN KEY (topic_id) REFERENCES topics(id)
             """))
 
+        # Ensure unique constraint uix_topic_hours_similarity exists on news_clusters
+        result = await conn.execute(text("""
+            SELECT 1 FROM pg_constraint WHERE conname = 'uix_topic_hours_similarity'
+        """))
+        if not result.fetchone():
+            # Drop old constraints that don't include topic_id
+            for old_name in ('news_clusters_hours_min_similarity_key', 'uix_hours_similarity'):
+                await conn.execute(text(f"""
+                    DO $$ BEGIN
+                        IF EXISTS (SELECT 1 FROM pg_constraint WHERE conname = '{old_name}') THEN
+                            ALTER TABLE news_clusters DROP CONSTRAINT {old_name};
+                        END IF;
+                    END $$
+                """))
+            await conn.execute(text("""
+                ALTER TABLE news_clusters
+                ADD CONSTRAINT uix_topic_hours_similarity UNIQUE (topic_id, hours, min_similarity)
+            """))
+
+        # Ensure unique constraint uix_umap_topic_hours_similarity exists on news_umap
+        result = await conn.execute(text("""
+            SELECT 1 FROM pg_constraint WHERE conname = 'uix_umap_topic_hours_similarity'
+        """))
+        if not result.fetchone():
+            # Drop old constraints that don't include topic_id
+            for old_name in ('news_umap_hours_key', 'uix_umap_hours_similarity'):
+                await conn.execute(text(f"""
+                    DO $$ BEGIN
+                        IF EXISTS (SELECT 1 FROM pg_constraint WHERE conname = '{old_name}') THEN
+                            ALTER TABLE news_umap DROP CONSTRAINT {old_name};
+                        END IF;
+                    END $$
+                """))
+            await conn.execute(text("""
+                ALTER TABLE news_umap
+                ADD CONSTRAINT uix_umap_topic_hours_similarity UNIQUE (topic_id, hours, min_similarity)
+            """))
+
         # Add topic_id to news_umap if missing
         result = await conn.execute(text("""
             SELECT 1 FROM information_schema.columns
