@@ -51,6 +51,14 @@ async def init_db():
             ON CONFLICT (slug) DO NOTHING
         """))
 
+        # Add language to topics if missing
+        result = await conn.execute(text("""
+            SELECT 1 FROM information_schema.columns
+            WHERE table_name='topics' AND column_name='language'
+        """))
+        if not result.fetchone():
+            await conn.execute(text("ALTER TABLE topics ADD COLUMN language VARCHAR NOT NULL DEFAULT 'en'"))
+
         # Add topic_id to news if missing
         result = await conn.execute(text("""
             SELECT 1 FROM information_schema.columns
